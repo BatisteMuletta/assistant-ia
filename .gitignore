@@ -1,0 +1,13 @@
+# Clés API et secrets — jamais versionnés (règle de sécurité du projet)
+.env
+
+# Fichiers Python compilés
+__pycache__/
+*.pyc
+
+# Environnements virtuels Python
+venv/
+env/
+
+# Fichiers de données locales générées par l'app (JSON/logs)
+*.log
