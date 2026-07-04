@@ -75,31 +75,51 @@ Besoin détecté
 | **Harnais (agent)** | La structure qui encadre un agent IA — ses instructions, ses outils disponibles, ses règles de sécurité. Comme un harnais d'escalade : il ne t'empêche pas d'agir mais définit le cadre sécurisé dans lequel l'agent opère. |
 | **Loop (agent)** | La boucle d'exécution d'un agent : observer → réfléchir → agir → observer le résultat → réfléchir à nouveau → etc. Exactement comme une boucle de contrôle en embarqué. Le harnais définit le cadre, la loop est ce qui tourne dedans. |
 
+| **Repo Git local** | Dossier versionné sur ta propre machine, contenant l'historique complet des commits (`.git/`). |
+| **Repo distant (GitHub)** | Copie hébergée en ligne du même historique, reliée au repo local via un `remote`. Ne se synchronise jamais automatiquement — il faut `push`/`pull` explicitement. |
+| **Personal Access Token (PAT)** | Jeton secret qui remplace le mot de passe du compte GitHub pour les opérations en ligne de commande. Même principe qu'une clé API. |
+| **Commit** | Point de restauration horodaté de l'historique Git, identifié par un hash unique. |
+| **Staging (`git add`)** | Zone d'attente intermédiaire où on choisit précisément ce qui ira dans le prochain commit. |
 ---
 
 ## Sessions
 
 ---
 
-### Session 0 — *À venir*
-**Date :** —
+### Session 0 — Mise en place du repo
+**Date :** 04/07/2026
 **Durée :** —
 **Étape du projet :** Étape 0 — Fichier de contexte + repo Git
 
 #### Ce qu'on a construit
-*À remplir*
+- Repo Git local initialisé (`~/projets/assistant-ia`)
+- `.gitignore` créé en premier, avant tout fichier sensible
+- `README.md`, `cahier_des_charges.md` (v4), `carnet_apprentissage.md`, `CONTEXTE.md`
+- Premier commit local (root-commit)
+- Repo GitHub distant créé et relié (`remote origin`), premier push réussi via Personal Access Token
 
 #### Ce qu'on a appris
-*À remplir*
+- Clé API = chaîne secrète qui authentifie, à traiter comme un mot de passe
+- `.env` = fichier séparant la config sensible du code ; `.gitignore` = liste des fichiers jamais versionnés
+- Repo **local** (sur la machine) vs repo **distant** (GitHub) : deux historiques distincts, reliés manuellement via `git remote add`
+- Depuis 2021, GitHub refuse le mot de passe du compte en ligne de commande → il faut un **Personal Access Token (PAT)**, même logique qu'une clé API
+- Workflow Git de base : `git status` → `git add` → `git commit` → `git remote add origin` → `git push -u origin main`
+- Un fichier commité puis "supprimé" reste dans l'historique Git tant que le commit n'est pas réécrit
+- Interface chat Claude.ai = aucun accès au disque local ; Claude Code / Cowork = accès réel aux fichiers
 
 #### Fonctionnalités Claude explorées
-*À remplir*
+- Prompting structuré (ajustement collaboratif du cahier des charges en cours de route)
+- Vérification de compréhension via QCM interactifs
 
 #### Points importants à retenir
-*À remplir*
+- Toujours créer `.gitignore` avant de créer un `.env`
+- Toujours `git status` avant `git add .`
+- Jamais de mot de passe en clair dans un terminal — un PAT/token à la place
 
 #### Questions ouvertes pour la prochaine session
-*À remplir*
+- Configurer un credential helper pour éviter de recoller le token à chaque push
+- SQLite vs JSON pour le stockage (à trancher avant/à l'étape 1)
+- Quand basculer vers Claude Code / Cowork pour la suite du projet
 
 ---
 
