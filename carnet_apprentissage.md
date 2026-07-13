@@ -124,5 +124,28 @@ Besoin détecté
 - SQLite vs JSON pour le stockage (à trancher avant/à l'étape 1)
 - Quand basculer vers Claude Code / Cowork pour la suite du projet
 ---
+
+### Session 1 — Layout dashboard + choix icônes Tabler (chat claude.ai) ✅ Terminée
+**Date :** 05/07/2026
+**Durée :** —
+**Étape du projet :** Étape 1 — Squelette visuel du dashboard
+
+#### Ce qu'on a construit
+- Layout du dashboard validé dans le chat claude.ai (grille CSS asymétrique 9 zones, icônes Tabler outline) — design validé, pas de code écrit encore
+- Décision actée : icônes Tabler en **auto-hébergé (SVG locaux)**, pas de CDN
+
+#### Ce qu'on a appris
+- Claude Code et le chat claude.ai n'ont **aucune mémoire partagée** : ce sont deux environnements complètement séparés (même si même modèle sous-jacent). Le pont entre les deux se fait manuellement via des fichiers `.md` transmis d'une session à l'autre.
+- **CDN vs auto-hébergé** pour un asset statique (icône) : le CDN introduit une dépendance réseau externe à chaque chargement (risque si le dashboard est un onglet ouvert en permanence) ; l'auto-hébergé évite ce point de fragilité et ne charge que les fichiers réellement utilisés — cohérent avec la philosophie déjà actée dans le projet (Whisper local, stockage local, minimiser les dépendances externes).
+- Différence entre **élément statique** (icône, fixe, ne change jamais) et **donnée dynamique** (contenu Gmail/Calendar récupéré via API) : deux mécanismes totalement indépendants — où est stocké le fichier icône n'a aucun impact sur la fraîcheur des données affichées.
+
+#### Points importants à retenir
+- Icônes Tabler → SVG locaux à ranger dans `assets/icons/` (à créer), pas de CDN.
+- Consigne explicite de l'utilisateur : continuer à poser une question d'architecture avant de générer du code dès qu'un choix structurant se présente (ex: CDN vs local), **même si la situation semble identique à une fois précédente** — ne jamais supposer que la réponse sera automatiquement la même.
+
+#### Questions ouvertes pour la prochaine session
+- Construction effective du HTML/CSS/JS du layout dashboard (étape 1)
+
+---
  
 *Les sessions suivantes s'ajouteront ici au fur et à mesure*

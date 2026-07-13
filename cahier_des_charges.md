@@ -8,8 +8,9 @@
 
 | Champ | Info |
 |---|---|
-| Formation actuelle | Mastère Spécialisé — Ingénierie d'Affaires Industrielles pour l'International |
-| Matières | Inconnues pour l'instant — mastère commence bientôt |
+| Formation actuelle | Mastère Spécialisé — Ingénierie d'Affaires Industrielles pour l'International, INSA Toulouse — début septembre 2026 |
+| Alternance | Catamania, Paris (Issy-les-Moulineaux) — en parallèle du mastère, à partir de septembre 2026 |
+| Matières | Inconnues pour l'instant |
 | Background technique | Développeur embarqué · 5 ans d'école d'ingénieur |
 | Langages maîtrisés | C / C++, Python, Bash |
 | Éditeur | VS Code |
@@ -388,3 +389,4 @@ Schéma de chaque étape :
 
 *Cahier des charges v4 — 04/07/2026 — document vivant, mis à jour à chaque étape*
 *Changements v3 → v4 : analogies embarqué plus légères/subtiles, parenthèses explicatives systématiques pour le jargon, explication proactive des nouveaux termes techniques, quiz de compréhension en QCM interactif plutôt qu'en question ouverte, clarification de la limite d'accès fichier du chat vs Claude Code.*
+*Changements v4 → v4.1 (13/07/2026) : profil utilisateur précisé (INSA Toulouse, alternance Catamania à Issy-les-Moulineaux à partir de septembre 2026).*
