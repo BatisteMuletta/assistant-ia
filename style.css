@@ -94,3 +94,78 @@ body {
 .icon-btn:hover {
   background-color: #f4f4f5;
 }
+
+/* Bouton de bascule provider : couleur accent quand l'API Anthropic (payante) est active,
+   pour que ce soit visuellement clair qu'on n'est plus sur Ollama (gratuit) */
+#btn-provider.provider-anthropic {
+  background-color: #eef2ff;
+  border-color: #c7d2fe;
+  color: #4338ca;
+}
+
+/* Zone coûts : cliquable, détail affiché/masqué au clic (icône seule par défaut) */
+.zone-couts {
+  cursor: pointer;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detail-couts {
+  font-size: 12px;
+  color: #52525b;
+  text-align: center;
+}
+
+.detail-couts.anomalie {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+/* Zone chat : cliquable pour ouvrir/fermer le panneau de saisie */
+.zone-chat {
+  cursor: pointer;
+}
+
+.zone-chat.ouvert {
+  flex-direction: column;
+  align-items: stretch;
+  padding: 10px;
+}
+
+.panneau-chat {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  gap: 8px;
+}
+
+.messages-chat {
+  flex: 1;
+  overflow-y: auto;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.messages-chat .message {
+  background-color: #ffffff;
+  border-radius: 8px;
+  padding: 6px 10px;
+  max-width: 80%;
+}
+
+.messages-chat .message.utilisateur {
+  align-self: flex-end;
+  background-color: #c7d2fe;
+}
+
+#form-chat input {
+  width: 100%;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 13px;
+}

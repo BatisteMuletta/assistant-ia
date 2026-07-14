@@ -218,10 +218,14 @@ Adaptatif selon l'urgence détectée :
 ### Stack technique
 - HTML / CSS / JS (commenté en français, structuré pour être modifiable)
 - **SDK officiel Anthropic** (`pip install anthropic`) plutôt que requêtes HTTP brutes
+- Serveur local Python (**Flask**, décidé le 14/07/2026) : sert le dashboard + fait le pont vers l'API Anthropic/Ollama (la clé API ne doit jamais être exposée côté navigateur)
+  - ⚠️ **À revisiter en fin de construction du projet 1** : Flask a été choisi pour sa simplicité (premier serveur web du projet), mais une migration vers **FastAPI** est à rediscuter une fois le dashboard terminé, si le besoin de typage/async/doc auto-générée se justifie davantage.
+- Bascule **Ollama (défaut, gratuit) ↔ API Anthropic (payant)** pour toutes les fonctionnalités IA, via une fonction centrale unique (`generer_reponse`) — un seul point de config, pas d'appels dispersés. Modèle local par défaut : **Llama 3.2 3B**.
 - OAuth Google (Gmail + Calendar)
-- Stockage : fichiers JSON + Markdown locaux
+- Stockage : fichiers JSON + Markdown locaux — **repo GitHub public** : `costs.json`, `chat_history.json`, `activity_log.json`, `stats.json` exclus du versionnement (`.gitignore`) car données personnelles
 - Notifications : `notify-send` (Ubuntu) → équivalent Windows à prévoir
 - Sécurité : fichier `.env` pour toutes les clés API — jamais en clair dans le code ou le terminal
+- Sécurité dépense API Anthropic : plafond 7,5€/mois côté Console Anthropic (barrière principale) + blocage serveur local à 10€ depuis `costs.json` (filet de secours, traité comme anomalie s'il est atteint)
 - Démarrage automatique : service **systemd** (lancement au boot, relance auto si crash, logs consultables)
 - Chemins cross-platform dès le départ
 

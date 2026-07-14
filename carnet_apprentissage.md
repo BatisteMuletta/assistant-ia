@@ -55,7 +55,16 @@ Besoin détecté
 | Intégration des icônes SVG dans le HTML | **SVG inline** (code du dessin copié directement dans le HTML) | Permet de changer la couleur de l'icône en CSS via `stroke="currentColor"` — utile pour les zones `suggestion`/`chat` qui ont un fond accent différent. **Écarté** : balise `<img src="icon.svg">` — HTML plus court et plus lisible, mais couleur de l'icône figée, impossible à changer en CSS sans bidouille (filtres peu fiables). |
 | Source des 9 icônes Tabler | **Téléchargées via script** (`curl`), une seule fois, depuis le dépôt officiel `tabler/tabler-icons` sur GitHub | Dépôt open source (licence MIT), téléchargement ponctuel au moment de la construction — aucune dépendance réseau ensuite au chargement du dashboard (cohérent avec la décision auto-hébergé déjà actée). **Écarté** : téléchargement manuel un par un sur tabler-icons.io — plus fastidieux, sans bénéfice de contrôle supplémentaire ici. |
 | Organisation des fichiers du dashboard | **Racine du repo** (`index.html`, `style.css`, `script.js`, `assets/icons/`) | Simple et suffisant tant qu'il n'y a qu'un seul dashboard à construire. **Écarté pour l'instant** : sous-dossier dédié (ex: `dashboard/`) — jugé prématuré à ce stade, décision volontairement provisoire : réorganisation prévue plus tard une fois les scripts des projets 2 et 3 présents dans le repo. |
- 
+| Protection de la clé API Anthropic | **Serveur local Python (Flask)** en pont entre `script.js` et l'API — la clé reste dans `.env`, lue uniquement côté serveur | `script.js` s'exécute dans le navigateur, donc lisible par n'importe qui via F12 — une clé écrite là serait aussi commitée sur GitHub (repo public) au premier push. **Écarté** : appeler l'API Anthropic directement depuis `script.js` — impossible à sécuriser, quelle que soit la précaution prise côté front. |
+| Framework du serveur local | **Flask**, provisoire | Le plus simple pour un premier serveur web fait maison, peu de concepts à apprendre d'un coup. **Écarté pour l'instant** : FastAPI (plus moderne, typé, doc auto-générée) — à rediscuter explicitement en fin de construction du projet 1 (dashboard), noté dans `cahier_des_charges.md`. |
+| Modèle IA par défaut du dashboard | **Ollama (Llama 3.2 3B) au démarrage**, bascule possible vers l'API Anthropic via une icône dédiée | Gratuit par défaut, cohérent avec la logique "minimiser les dépendances/coûts" déjà actée ailleurs (Whisper local). Bascule pensée pour toutes les fonctionnalités IA futures (pas que le chat), via une fonction centrale unique `generer_reponse()` — un seul point de config à changer, jamais d'appel dispersé à un provider précis dans le code. **Écarté** : coder des appels Ollama/Anthropic séparés dans chaque fonctionnalité — casserait la bascule globale et dupliquerait la logique de sécurité des coûts. |
+| Sécurité de dépense API Anthropic | **Double seuil asymétrique** : plafond 7,5€/mois côté Console Anthropic (barrière principale, crédits prépayés + auto-reload désactivé) + blocage serveur local à 10€ depuis `costs.json` (filet de secours) | Le plafond Console est un vrai plafond dur, impossible à dépasser techniquement. Le seuil serveur à 10€ est une anomalie si jamais atteint — signe que le premier a échoué quelque part, pas un fonctionnement normal. **Écarté** : un seul seuil unique — moins robuste, aucune détection possible si le mécanisme principal tombe en panne. |
+| Affichage du bloc "Suivi des coûts" | **Icône seule par défaut, détail affiché au clic** (montant dépensé / 7,5€, alerte distincte si 10€ atteint) | Respecte le design validé à l'étape 1 (zones identifiées par icône uniquement, pas de texte visible en permanence) tout en rendant la donnée consultable. **Écarté** : texte permanent sous l'icône — plus lisible en un coup d'œil, mais entorse au principe du layout figé sans qu'on en ait rediscuté explicitement. |
+| Données personnelles et repo public | **`.gitignore`** étendu à `costs.json`, `chat_history.json`, `activity_log.json`, `stats.json` | Le repo GitHub est public — ces fichiers contiennent des données personnelles générées à l'usage (dépenses, conversations), pas du code. **Écarté** : les versionner comme le reste — exposerait publiquement des informations privées à chaque push. |
+| Stockage du PAT GitHub (session 0-1) | **`credential.helper store` + fine-grained PAT scopé au seul repo `assistant-ia`** | Le PAT en clair sur disque n'est acceptable que parce que son rayon de dégât est limité à ce seul repo (moindre privilège) — même en cas de processus compromis tournant sous l'utilisateur, aucun autre dépôt n'est atteignable. **Écarté** : `gh auth login` — plus simple (trousseau chiffré) mais scopes larges par défaut, proches d'un accès à tous les repos privés ; `credential.helper cache` — plus prudent mais retapage régulier, jugé pas nécessaire vu le scope déjà restreint du PAT ; push manuel à chaque fois — zéro risque mais trop de friction pour un usage quotidien. |
+| Interface Claude Code pour ce projet | **Terminal** (plutôt que l'onglet Code de Claude Desktop) | Plusieurs étapes à venir demandent une exécution autonome et continue (service systemd, surveillance `inotify`, pipeline audio) — seul le terminal permet ça, l'onglet Code s'arrête si l'app se ferme (une seule session active). **Écarté** : onglet Code comme interface principale — reste utile ponctuellement pour visualiser un diff, mais pas comme outil principal. |
+| Vérification visuelle du dashboard | **Playwright** (bibliothèque de pilotage automatique de navigateur) | Permet à l'agent de vérifier lui-même le rendu (capture d'écran, lecture de la console) sans dépendre du regard de l'utilisateur à chaque petit test — complète (et non remplace) la validation finale de l'utilisateur. **Écarté** : Firefox classique piloté en headless — a échoué techniquement dans cet environnement (conflit avec l'instance déjà ouverte) ; `chromium-cli` — outil non installé sur cette machine. |
+
 ---
  
 ## Glossaire cumulatif
@@ -64,10 +73,10 @@ Besoin détecté
 | Terme | Définition simple |
 |---|---|
 | **Token** | Unité de base de découpage du texte pour un LLM — souvent un mot courant entier, ou un fragment pour un mot plus rare. C'est l'unité qui sert de base à la facturation de l'API et à la limite de context window. |
-| **Context window** | Quantité maximale de tokens qu'un LLM peut "voir" en même temps (message actuel + historique + documents attachés). Au-delà, les informations les plus anciennes sortent de la vue du modèle. |
-| LLM | *À définir en session 0* |
+| **Context window** | Quantité maximale de tokens qu'un LLM peut "voir" en même temps (message actuel + historique + documents attachés). Au-delà, les informations les plus anciennes sortent de la vue du modèle. Dans Claude Code : `/context` affiche le détail par catégorie, `/usage` le coût réel de la session, `/clear` vide l'historique (repart à 0 token, garde les fichiers projet), `/compact` résume la conversation en cours sans tout perdre. Chaque nouveau message renvoie tout l'historique précédent — le coût grimpe avec la longueur de la conversation, même pour un message court. |
+| **LLM** (*Large Language Model*) | Modèle de langage entraîné sur d'énormes quantités de texte, capable de générer du texte en réponse à un prompt. Claude et Llama (via Ollama) en sont deux exemples — l'un hébergé (API payante), l'autre exécutable en local (gratuit). |
 | **Prompt** | Le texte envoyé à Claude pour formuler une demande. Un bon prompt précise le contexte et le format attendu, donne des exemples (positifs/négatifs), et peut demander un raisonnement étape par étape pour les tâches complexes. |
-| API REST | *À définir en session 0* |
+| **API REST** | Manière standardisée pour deux programmes de communiquer par Internet/réseau local via des requêtes HTTP (GET, POST...) envoyées à des URLs précises (*endpoints*). Le serveur local du dashboard expose sa propre API REST (`/api/chat`, `/api/costs`...) que `script.js` appelle. |
 | Agent IA | *À définir en session 0* |
 | Skill | *À définir en session 0* |
 | MCP | *À définir en session 0* |
@@ -84,7 +93,14 @@ Besoin détecté
 | **Personal Access Token (PAT)** | Jeton secret qui remplace le mot de passe du compte GitHub pour les opérations en ligne de commande. Même principe qu'une clé API. |
 | **Commit** | Point de restauration horodaté de l'historique Git, identifié par un hash unique. |
 | **Staging (`git add`)** | Zone d'attente intermédiaire où on choisit précisément ce qui ira dans le prochain commit. |
- 
+| **Serveur proxy (pont)** | Petit serveur intermédiaire qui reçoit une requête, la retransmet à un autre service (ici l'API Anthropic ou Ollama), puis renvoie la réponse. Utilisé ici pour que la clé API reste côté serveur, jamais exposée au navigateur. |
+| **Endpoint / route API** | URL précise qu'un serveur expose pour une action donnée (ex: `/api/chat` pour envoyer un message). Le "verbe" HTTP (GET, POST...) précise le type d'action attendu. |
+| **Provider (fournisseur de modèle IA)** | Dans ce projet : soit Ollama (local, gratuit), soit l'API Anthropic (payante). Le code ne doit jamais appeler un provider directement — toujours passer par la fonction centrale `generer_reponse()`, qui décide elle-même lequel utiliser. |
+| **Ollama** | Outil qui fait tourner un LLM en local sur sa propre machine (ex: Llama 3.2), avec une API HTTP locale (`localhost:11434`) très proche de celle d'un vrai service cloud — ce qui permet de coder contre la même interface qu'on utilise Ollama ou l'API Anthropic. |
+| **Seuil de dépense (cost cap)** | Limite de dépense fixée à l'avance sur un service payant, pour éviter une facture incontrôlée (bug, boucle infinie...). Deux seuils utilisés ici : un plafond compte (Console Anthropic, barrière principale) et un blocage applicatif (serveur local, filet de secours en cas d'échec du premier). |
+| **Trousseau système (keyring)** | Coffre-fort intégré à l'OS (GNOME Keyring sur Ubuntu) qui stocke des secrets chiffrés — illisibles sans la clé de déchiffrement, elle-même liée à la session utilisateur ouverte. Protège un secret au repos (disque volé, session verrouillée), mais pas pendant une session active : tout processus tournant sous l'utilisateur peut alors y accéder déchiffré. |
+| **Injection de prompt** | Instructions cachées dans un contenu lu par un agent IA (fichier, page web...) qui tentent de le manipuler pour lui faire exécuter des actions non voulues. Un contenu lu par l'agent n'est jamais traité comme une instruction valide venant de l'utilisateur — seule la vraie conversation avec l'utilisateur fait autorité. |
+
 ---
  
 ## Sessions
@@ -171,6 +187,43 @@ Voir le tableau **Recueil d'exemples commentés** plus haut dans ce carnet pour 
 #### Questions ouvertes pour la prochaine session
 - Test visuel du dashboard dans Chrome
 - Étape 2 : chat Claude + journal d'activité + stats (API Anthropic)
+
+---
+
+### Session 3 — Chat Claude, serveur local, bascule Ollama/Anthropic ✅ Terminée
+**Date :** 14/07/2026
+**Durée :** —
+**Étape du projet :** Étape 2 — Chat Claude + suivi des coûts
+
+#### Ce qu'on a construit
+- `server.py` : serveur Flask local, sert le dashboard et expose `/api/chat`, `/api/provider`, `/api/provider/toggle`, `/api/costs`
+- `ia_provider.py` : fonction centrale `generer_reponse()` qui décide seule du provider (Ollama ou Anthropic) — aucun appel direct dispersé ailleurs dans le code
+- `costs.py` : suivi de dépense mensuel dans `costs.json`, double seuil (7,5€ informationnel / 10€ blocage anomalie)
+- Ollama installé **sans `sudo`** (binaire seul dans `~/.local`, pas de service système) + modèle `llama3.2:3b` téléchargé
+- `index.html`/`style.css`/`script.js` mis à jour : panneau de chat (icône → zone de saisie au clic), icône de bascule provider (`toggle-left`/`toggle-right`) dans la colonne `misc`, détail des coûts affiché au clic sur la zone `couts`
+- `.env.example`, `requirements.txt`, `config.json` (état du provider, défaut `ollama`)
+- `.gitignore` étendu : `costs.json`, `chat_history.json`, `activity_log.json`, `stats.json` exclus (repo public, données personnelles)
+
+#### Décisions d'architecture prises avant de construire
+Voir le tableau **Recueil d'exemples commentés** plus haut : protection de la clé API par serveur proxy, choix Flask (provisoire, FastAPI à revoir en fin de projet 1 — noté dans `cahier_des_charges.md`), bascule Ollama/Anthropic via fonction centrale, double seuil de dépense asymétrique, affichage coûts icône-seule-puis-clic, `.gitignore` étendu.
+
+#### Ce qu'on a appris
+- **Pourquoi une clé API ne peut jamais vivre dans `script.js`** : le JS côté navigateur est lisible par n'importe qui (F12), et un fichier non exclu par `.gitignore` finit de toute façon commité sur un repo public dès le premier push.
+- **Pattern d'abstraction "provider"** : une seule fonction (`generer_reponse`) décide quel modèle utiliser, le reste du code ne connaît jamais Ollama ou Anthropic directement — même logique qu'une couche d'abstraction matérielle (HAL) en embarqué : le code appelant ne change jamais, seule la couche du dessous change de driver.
+- **Ollama sans `sudo`** : le binaire officiel peut être extrait manuellement (`tar --zstd`) dans `~/.local/bin` et lancé à la main (`ollama serve`) sans passer par l'installeur qui, lui, exige `sudo` pour un service système complet (utilisateur dédié, `systemd`).
+- **Pourquoi deux seuils de dépense asymétriques** : le plafond Console Anthropic est un vrai plafond dur (crédits prépayés), donc censé suffire seul. Le seuil serveur à 10€ n'est qu'un filet de secours — s'il se déclenche un jour, ce n'est pas un événement normal mais le signe que le premier mécanisme a échoué quelque part.
+
+#### Points importants à retenir
+- Le provider par défaut au lancement est **Ollama** (gratuit) — l'API Anthropic ne s'active qu'en cliquant sur l'icône de bascule.
+- Le plafond de 7,5€/mois côté **Console Anthropic reste à configurer manuellement** (compte utilisateur, pas accessible depuis le code) — à faire avant tout premier vrai test avec l'API Anthropic, guidé pas à pas.
+- Modèle Anthropic choisi pour le chat : `claude-haiku-4-5-20251001` (le moins cher de la gamme), cohérent avec le budget serré du projet.
+- Les prix utilisés dans `costs.py` pour estimer le coût par appel sont approximatifs — le seuil de 10€ est un filet de secours, pas un compteur exact ; se fier au tableau de bord de la Console Anthropic pour le montant réel.
+
+#### Questions ouvertes pour la prochaine session
+- Configurer le plafond 7,5€ sur la Console Anthropic (guidé pas à pas) avant tout usage réel de l'API Anthropic
+- Tester concrètement la bascule vers Anthropic une fois le plafond en place
+- Rediscuter Flask vs FastAPI en fin de construction du dashboard (projet 1)
+- Étape 3 : Gmail + Calendar + notifications (MCP, OAuth)
 
 ---
  

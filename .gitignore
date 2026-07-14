@@ -10,4 +10,9 @@ venv/
 env/
 
 # Fichiers de données locales générées par l'app (JSON/logs)
+# Repo public : données personnelles jamais versionnées (dépenses, historique chat, activité)
 *.log
+costs.json
+chat_history.json
+activity_log.json
+stats.json
