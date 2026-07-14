@@ -46,6 +46,39 @@ Besoin détecté
 *(À affiner et complexifier au fil des sessions avec des cas réels)*
  
 ---
+
+## Fiche machine actuelle
+*Référence rapide, à revérifier si la machine change*
+
+| Élément | Valeur |
+|---|---|
+| Modèle | ThinkPad X260 |
+| RAM totale | 7,6 Gi |
+| GPU | Intel HD Graphics 520, intégré (Skylake) — pas de carte dédiée, partage la RAM système |
+| OS | Ubuntu, **configuré en anglais** → dossier de téléchargements = `Downloads` (pas `Téléchargements`) |
+| Modèle Ollama retenu | Llama 3.2 3B |
+
+Commandes de vérification (à refaire sur une nouvelle machine, ne jamais supposer) : `free -h` (RAM totale), `lspci | grep -i vga` (GPU dédié ou intégré), `nvidia-smi` (VRAM si NVIDIA détecté).
+
+## Fiche portabilité — changement de machine
+*Principe : tout ce qui est dans le repo Git suit automatiquement (`git clone`). Tout ce qui est propre à la machine (matériel, secrets, config système) doit être refait à la main.*
+
+**Se retrouve automatiquement** : code du dashboard, code du serveur Python, icônes SVG auto-hébergées, la fonction d'abstraction `generer_reponse` et toute la logique métier.
+
+**À refaire manuellement sur une nouvelle machine** :
+
+| Élément | Pourquoi ça ne se transfère pas | Quoi faire |
+|---|---|---|
+| `.env` (clé API Anthropic) | Protégé par `.gitignore`, jamais versionné — c'est le principe même de sa protection | Recréer le fichier à la main avec la clé |
+| PAT GitHub / credential Git | Local à la machine, jamais dans le repo | Reconfigurer un fine-grained PAT limité au repo, ou `gh auth login` |
+| Ollama + modèle local | Logiciel et modèle à retélécharger | Réinstaller ; **revérifier le matériel** avant de choisir le modèle, ne pas supposer que Llama 3.2 3B reste adapté |
+| Claude Code | Outil installé sur le système, pas dans le repo | Réinstaller (`curl -fsSL https://claude.ai/install.sh \| bash`) |
+| Service `systemd` (lancement auto) | Config système, pas un fichier de projet | Recréer/réactiver sur la nouvelle machine |
+| Dossier de téléchargements | Le nom dépend de la langue du système | Vérifier le nom exact avant toute commande `mv` |
+
+**Cas particulier migration Windows** (déjà prévue au cahier des charges) : `notify-send` n'existe pas sous Windows, équivalent à trouver ; chemins déjà pensés cross-platform.
+
+---
  
 ## Recueil d'exemples commentés
 *Chaque brique technique des 3 projets, avec le raisonnement qui a mené au choix*
@@ -100,6 +133,12 @@ Besoin détecté
 | **Seuil de dépense (cost cap)** | Limite de dépense fixée à l'avance sur un service payant, pour éviter une facture incontrôlée (bug, boucle infinie...). Deux seuils utilisés ici : un plafond compte (Console Anthropic, barrière principale) et un blocage applicatif (serveur local, filet de secours en cas d'échec du premier). |
 | **Trousseau système (keyring)** | Coffre-fort intégré à l'OS (GNOME Keyring sur Ubuntu) qui stocke des secrets chiffrés — illisibles sans la clé de déchiffrement, elle-même liée à la session utilisateur ouverte. Protège un secret au repos (disque volé, session verrouillée), mais pas pendant une session active : tout processus tournant sous l'utilisateur peut alors y accéder déchiffré. |
 | **Injection de prompt** | Instructions cachées dans un contenu lu par un agent IA (fichier, page web...) qui tentent de le manipuler pour lui faire exécuter des actions non voulues. Un contenu lu par l'agent n'est jamais traité comme une instruction valide venant de l'utilisateur — seule la vraie conversation avec l'utilisateur fait autorité. |
+| **Serveur** | Un programme qui reste allumé en continu et attend des questions, comme un guichet qui ne ferme jamais tout seul — répond, puis attend la suivante. Ollama, le serveur Python du dashboard, et l'API Anthropic sont trois exemples du même principe **client-serveur**, seule change l'adresse du guichet. |
+| **`localhost` / port** | `localhost` = "sur ma propre machine, jamais sur internet". Le **port** (ex: `5000` pour le serveur Flask, `11434` pour Ollama) = le numéro de bureau précis à l'intérieur du bâtiment, pour distinguer plusieurs programmes qui tournent en même temps sur la même machine. |
+| **JSON** | Format texte structuré (ex: `{"message": "salut"}`) utilisé comme langue commune entre le navigateur (JavaScript) et le serveur (Python), malgré des langages différents. |
+| **Loopback / LAN / WAN** | Trois échelles réseau, du plus petit au plus grand. **Loopback** : la machine se parle à elle-même, ne sort jamais par la carte réseau — c'est `localhost` (ex: Ollama). **LAN** : plusieurs appareils reliés entre eux sans sortir sur internet (ex: PC et imprimante sur la même box). **WAN** : la communication traverse vraiment internet (ex: `api.anthropic.com`). |
+| **Moindre privilège (dossiers)** | Sur Linux, les permissions appartiennent aux dossiers, pas aux programmes. `~/` appartient à l'utilisateur (aucune élévation nécessaire) ; `/usr`, `/etc` appartiennent à root (`sudo` obligatoire). Un programme installé dans `~/.local/` (Ollama, Playwright, Claude Code...) ne peut, au pire, abîmer que les fichiers de l'utilisateur — jamais le système entier. |
+| **Quota Claude Code Pro vs budget API** | Deux limites séparées, à ne pas confondre : le quota de l'abonnement Pro (fenêtre glissante de 5h + plafond hebdomadaire, pour l'usage interactif de Claude Code) et le budget API (5$/7$ configuré dans ce projet, pour les appels Anthropic du dashboard). Si le quota Pro s'épuise en pleine tâche, Claude Code s'arrête net (rien n'est perdu sur le disque) ; `/usage` permet de surveiller ce quota, comme `/context` pour la fenêtre de contexte. |
 
 ---
  
@@ -252,9 +291,11 @@ Voir le tableau **Recueil d'exemples commentés** plus haut : protection de la c
 #### Points importants à retenir
 - Le plafond réel est maintenant **5$/mois**, crédits prépayés + auto-reload désactivé + spend limit + alertes email — confirmé actif.
 - Si la RAM libre est basse au moment d'utiliser le dashboard, fermer des applications avant de tester le chat Ollama (ou basculer sur Anthropic, qui ne consomme aucune ressource locale).
+- **Clé API Anthropic créée et testée en conditions réelles** : `.env` configuré par l'utilisateur (jamais partagé dans la conversation), bascule Ollama→Anthropic→Ollama validée de bout en bout. Premier appel réel : 0,0004$ dépensé, réponse quasi instantanée (contre ~45s avec Ollama sur cette machine) — écart de rapidité qui rend le compromis payant/gratuit très concret.
+- **Design volontairement laissé au minimum jusqu'ici** (pas de vraie identité visuelle, juste la structure fonctionnelle) — passe design dédiée à prévoir une fois toutes les zones du dashboard connectées à de vraies données (fin projet 1), plutôt que de peaufiner une coquille encore vide.
 
 #### Questions ouvertes pour la prochaine session
-- Tester concrètement la bascule vers Anthropic maintenant que le plafond Console est en place
+- Passe design dédiée sur le dashboard (couleurs, typographie, finitions) une fois toutes les fonctionnalités branchées
 - Rediscuter Flask vs FastAPI en fin de construction du dashboard (projet 1)
 - Étape 3 : Gmail + Calendar + notifications (MCP, OAuth)
 
