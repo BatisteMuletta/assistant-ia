@@ -50,9 +50,11 @@ Besoin détecté
 ## Recueil d'exemples commentés
 *Chaque brique technique des 3 projets, avec le raisonnement qui a mené au choix*
  
-| Brique | Choix fait | Pourquoi |
+| Brique | Choix fait | Pourquoi (et ce qui a été écarté) |
 |---|---|---|
-| *À remplir au fil des sessions* | | |
+| Intégration des icônes SVG dans le HTML | **SVG inline** (code du dessin copié directement dans le HTML) | Permet de changer la couleur de l'icône en CSS via `stroke="currentColor"` — utile pour les zones `suggestion`/`chat` qui ont un fond accent différent. **Écarté** : balise `<img src="icon.svg">` — HTML plus court et plus lisible, mais couleur de l'icône figée, impossible à changer en CSS sans bidouille (filtres peu fiables). |
+| Source des 9 icônes Tabler | **Téléchargées via script** (`curl`), une seule fois, depuis le dépôt officiel `tabler/tabler-icons` sur GitHub | Dépôt open source (licence MIT), téléchargement ponctuel au moment de la construction — aucune dépendance réseau ensuite au chargement du dashboard (cohérent avec la décision auto-hébergé déjà actée). **Écarté** : téléchargement manuel un par un sur tabler-icons.io — plus fastidieux, sans bénéfice de contrôle supplémentaire ici. |
+| Organisation des fichiers du dashboard | **Racine du repo** (`index.html`, `style.css`, `script.js`, `assets/icons/`) | Simple et suffisant tant qu'il n'y a qu'un seul dashboard à construire. **Écarté pour l'instant** : sous-dossier dédié (ex: `dashboard/`) — jugé prématuré à ce stade, décision volontairement provisoire : réorganisation prévue plus tard une fois les scripts des projets 2 et 3 présents dans le repo. |
  
 ---
  
@@ -145,6 +147,30 @@ Besoin détecté
 
 #### Questions ouvertes pour la prochaine session
 - Construction effective du HTML/CSS/JS du layout dashboard (étape 1)
+
+---
+
+### Session 2 — Construction du squelette HTML/CSS/JS ✅ Terminée
+**Date :** 14/07/2026
+**Durée :** —
+**Étape du projet :** Étape 1 — Squelette visuel du dashboard
+
+#### Ce qu'on a construit
+- `assets/icons/` : les 9 SVG Tabler outline téléchargés (notes, list-check, mail, bulb, calendar, message-circle, currency-euro, history, chart-bar)
+- `index.html` : structure de la grille 9 zones, icônes en SVG inline, commenté en français
+- `style.css` : CSS Grid asymétrique reprenant exactement `layout_dashboard_etape1.md`, zones `suggestion`/`chat` en fond accent, les 7 autres en style neutre identique
+- `script.js` : fichier créé mais vide pour l'instant — pas de logique dynamique à cette étape
+
+#### Décisions d'architecture prises avant de construire
+Voir le tableau **Recueil d'exemples commentés** plus haut dans ce carnet pour le détail choisi/écarté/pourquoi sur : intégration SVG inline vs `<img>`, source des icônes (script vs téléchargement manuel), organisation des fichiers (racine vs sous-dossier).
+
+#### Points importants à retenir
+- Organisation en racine du repo = choix **volontairement provisoire**, à revoir quand les projets 2 et 3 arriveront.
+- Configuration Git faite en parallèle : `credential.helper store` + PAT fine-grained scopé à ce seul repo (accès complet uniquement sur `assistant-ia`, pas sur le reste du compte GitHub) → push possible sans ressaisir les identifiants.
+
+#### Questions ouvertes pour la prochaine session
+- Test visuel du dashboard dans Chrome
+- Étape 2 : chat Claude + journal d'activité + stats (API Anthropic)
 
 ---
  

@@ -1,0 +1,96 @@
+/* Dashboard — style.css
+   Layout validé dans layout_dashboard_etape1.md : grille asymétrique 9 zones,
+   identifiées par icônes uniquement, light mode minimaliste. */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background-color: #f4f4f5;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+/* Grille principale : reprend exactement la structure de layout_dashboard_etape1.md */
+.dashboard {
+  width: 100%;
+  max-width: 1100px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 0.5fr;
+  grid-template-rows: 90px 1fr 90px 1fr;
+  grid-template-areas:
+    "notes taches gmail gmail"
+    "suggestion suggestion gmail gmail"
+    "suggestion suggestion calendrier calendrier"
+    "chat chat couts misc";
+  gap: 10px;
+}
+
+/* Bloc neutre par défaut : même style pour les 7 zones non mises en avant */
+.zone {
+  background-color: #ffffff;
+  border: 1px solid #e4e4e7;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #52525b;
+}
+
+/* Zones mises en avant (suggestion, chat) : seules zones d'interaction directe avec Claude */
+.zone-accent {
+  background-color: #eef2ff;
+  border-color: #c7d2fe;
+  color: #4338ca;
+}
+
+.zone-notes      { grid-area: notes; }
+.zone-taches     { grid-area: taches; }
+.zone-gmail      { grid-area: gmail; }
+.zone-suggestion { grid-area: suggestion; }
+.zone-calendrier { grid-area: calendrier; }
+.zone-chat       { grid-area: chat; }
+.zone-couts      { grid-area: couts; }
+
+/* Icônes des zones principales */
+.zone svg {
+  width: 28px;
+  height: 28px;
+}
+
+/* Colonne étroite "misc" : journal + stats, deux mini-icônes empilées */
+.zone-misc {
+  grid-area: misc;
+  background: none;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-btn {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  background-color: #ffffff;
+  border: 1px solid #e4e4e7;
+  border-radius: 12px;
+  color: #52525b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-btn:hover {
+  background-color: #f4f4f5;
+}
