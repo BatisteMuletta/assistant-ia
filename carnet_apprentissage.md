@@ -226,5 +226,38 @@ Voir le tableau **Recueil d'exemples commentés** plus haut : protection de la c
 - Étape 3 : Gmail + Calendar + notifications (MCP, OAuth)
 
 ---
+
+### Session 4 — Test réel du dashboard, config Console Anthropic, passage €→$ ✅ Terminée
+**Date :** 14/07/2026
+**Durée :** —
+**Étape du projet :** Étape 2 — Chat Claude + suivi des coûts (finalisation)
+
+#### Ce qu'on a fait
+- Test réel du dashboard construit en Session 3 : chat Ollama fonctionnel, mais réponses lentes (~45s pour 3 phrases)
+- Diagnostic de la lenteur : RAM quasi saturée (234 Mio libres sur 7,6 Go) + swap plein à 100% (2 Go/2 Go) au moment du test, pas un bug du code — le modèle Ollama doit composer avec la mémoire déjà occupée par Claude Desktop/VS Code/Firefox tournant en parallèle
+- Configuration réelle de la Console Anthropic : **5$ de crédits prépayés, auto-reload désactivé, spend limit à 5$, alertes email activées** (montant finalement choisi par l'utilisateur, différent des 7,5€ envisagés en Session 3)
+- Recalage du code sur la vraie devise de facturation (**dollars**, pas euros) : `costs.py` (seuils 5$/7$), icône `€` remplacée par une icône `$` (`currency-dollar.svg`) sur le bloc coûts du dashboard, textes de `script.js` et messages d'erreur de `ia_provider.py` mis à jour
+
+#### Ce qu'on a appris
+- **RAM quasi pleine + swap plein → ralentissement massif**, même pour un petit modèle (3B) sur un CPU à 4 cœurs sans GPU dédié — la mémoire disponible compte plus que le nombre de cœurs pour l'inférence locale.
+- **Le compromis Ollama/Anthropic redevient concret ici** : Ollama gratuit mais consomme les ressources de la machine (RAM/CPU, peut ralentir tout le reste) ; l'API Anthropic payante mais aucune charge locale — le tout s'exécute dans le cloud d'Anthropic.
+- La Console Anthropic facture en **dollars**, pas en euros — un point à vérifier avant de fixer des seuils dans le code plutôt que de supposer la devise.
+
+#### Décisions d'architecture
+| Brique | Choix fait | Pourquoi (et ce qui a été écarté) |
+|---|---|---|
+| Devise de suivi des coûts | **Dollars ($)** partout dans le code (seuils, calculs, affichage, icône) | Coïncide avec la vraie devise de facturation Anthropic — évite d'empiler une conversion €/$ approximative sur des prix déjà approximatifs. **Écarté** : garder l'affichage en euros avec conversion au taux du jour — ajoute une source d'erreur supplémentaire sans bénéfice réel. |
+| Seuils de dépense finaux | **5$ principal (= plafond Console réel) / 7$ secours** | Recalés sur ce que l'utilisateur a réellement configuré sur la Console (5$, pas 7,5€ comme envisagé en Session 3) — le code doit refléter la vraie configuration du compte, pas un plan initial dépassé. |
+
+#### Points importants à retenir
+- Le plafond réel est maintenant **5$/mois**, crédits prépayés + auto-reload désactivé + spend limit + alertes email — confirmé actif.
+- Si la RAM libre est basse au moment d'utiliser le dashboard, fermer des applications avant de tester le chat Ollama (ou basculer sur Anthropic, qui ne consomme aucune ressource locale).
+
+#### Questions ouvertes pour la prochaine session
+- Tester concrètement la bascule vers Anthropic maintenant que le plafond Console est en place
+- Rediscuter Flask vs FastAPI en fin de construction du dashboard (projet 1)
+- Étape 3 : Gmail + Calendar + notifications (MCP, OAuth)
+
+---
  
 *Les sessions suivantes s'ajouteront ici au fur et à mesure*

@@ -62,7 +62,7 @@ def _appel_ollama(message):
 def _appel_anthropic(message):
     if get_total_spent() >= SEUIL_ANOMALIE:
         raise CoutBloqueError(
-            f"Seuil de secours de {SEUIL_ANOMALIE}€ atteint ce mois-ci — appel bloqué. "
+            f"Seuil de secours de {SEUIL_ANOMALIE}$ atteint ce mois-ci — appel bloqué. "
             "Ceci ne devrait jamais arriver si le plafond Console Anthropic fonctionne : "
             "vérifier la configuration sur console.anthropic.com."
         )

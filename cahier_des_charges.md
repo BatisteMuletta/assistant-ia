@@ -225,7 +225,7 @@ Adaptatif selon l'urgence détectée :
 - Stockage : fichiers JSON + Markdown locaux — **repo GitHub public** : `costs.json`, `chat_history.json`, `activity_log.json`, `stats.json` exclus du versionnement (`.gitignore`) car données personnelles
 - Notifications : `notify-send` (Ubuntu) → équivalent Windows à prévoir
 - Sécurité : fichier `.env` pour toutes les clés API — jamais en clair dans le code ou le terminal
-- Sécurité dépense API Anthropic : plafond 7,5€/mois côté Console Anthropic (barrière principale) + blocage serveur local à 10€ depuis `costs.json` (filet de secours, traité comme anomalie s'il est atteint)
+- Sécurité dépense API Anthropic : plafond **5$/mois** côté Console Anthropic (crédits prépayés + auto-reload désactivé + spend limit, configuré le 14/07/2026 — barrière principale) + blocage serveur local à **7$** depuis `costs.json` (filet de secours, traité comme anomalie s'il est atteint). Suivi en dollars (devise réelle de facturation Anthropic), pas en euros.
 - Démarrage automatique : service **systemd** (lancement au boot, relance auto si crash, logs consultables)
 - Chemins cross-platform dès le départ
 

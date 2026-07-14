@@ -101,10 +101,10 @@ async function rafraichirCouts() {
   const reponse = await fetch("/api/costs");
   const donnees = await reponse.json();
   if (donnees.anomalie) {
-    detailCouts.textContent = `⚠ Anomalie : ${donnees.depense}€ (seuil de secours ${donnees.seuil_anomalie}€ atteint)`;
+    detailCouts.textContent = `⚠ Anomalie : ${donnees.depense}$ (seuil de secours ${donnees.seuil_anomalie}$ atteint)`;
     detailCouts.classList.add("anomalie");
   } else {
-    detailCouts.textContent = `${donnees.depense}€ / ${donnees.seuil_principal}€`;
+    detailCouts.textContent = `${donnees.depense}$ / ${donnees.seuil_principal}$`;
     detailCouts.classList.remove("anomalie");
   }
 }

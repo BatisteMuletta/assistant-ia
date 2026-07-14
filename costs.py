@@ -1,9 +1,14 @@
 # costs.py — Suivi des dépenses API Anthropic (double seuil, voir cahier des charges)
 #
-# Seuil principal (7,5€) : informationnel côté serveur, la vraie barrière est le
-# plafond configuré dans la Console Anthropic (crédits prépayés + auto-reload désactivé).
-# Seuil de secours (10€) : blocage réel ici, ne devrait jamais être atteint en
-# fonctionnement normal — s'il l'est, c'est une anomalie (le plafond Console a échoué).
+# Tout est suivi en DOLLARS ($), pas en euros : la Console Anthropic facture en $,
+# configuré concrètement le 14/07/2026 avec 5$ de crédits prépayés + auto-reload
+# désactivé + spend limit à 5$ (voir carnet_apprentissage.md, Session 4).
+#
+# Seuil principal (5$) : reflète le plafond réel configuré dans la Console Anthropic
+# (crédits prépayés + auto-reload désactivé) — normalement déjà un vrai plafond dur.
+# Seuil de secours (7$) : blocage redondant ici, ne devrait jamais être atteint en
+# fonctionnement normal — s'il l'est, c'est une anomalie (le plafond Console a échoué
+# ou a été reconfiguré sans mise à jour de ce fichier).
 #
 # Prix approximatifs (à vérifier sur console.anthropic.com/settings/billing avant
 # de s'y fier pour un vrai suivi précis — le seuil de secours sert de filet, pas
@@ -15,8 +20,8 @@ from pathlib import Path
 
 COSTS_PATH = Path(__file__).parent / "costs.json"
 
-SEUIL_PRINCIPAL = 7.5
-SEUIL_ANOMALIE = 10.0
+SEUIL_PRINCIPAL = 5.0
+SEUIL_ANOMALIE = 7.0
 
 PRIX_INPUT_PAR_TOKEN = 3.0 / 1_000_000
 PRIX_OUTPUT_PAR_TOKEN = 15.0 / 1_000_000
