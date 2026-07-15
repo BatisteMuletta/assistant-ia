@@ -1,6 +1,24 @@
 /* Dashboard — style.css
    Layout validé dans layout_dashboard_etape1.md : grille asymétrique 9 zones,
-   identifiées par icônes uniquement, light mode minimaliste. */
+   identifiées par icônes uniquement.
+   DA alignée sur l'app Claude (claude.ai) : fond crème chaud, accent terracotta,
+   sans-serif pour l'interface, serif pour le texte de conversation. */
+
+:root {
+  --bg: #faf9f5;
+  --surface: #ffffff;
+  --border: #e5e4df;
+  --text: #30302e;
+  --text-muted: #83827d;
+  --accent: #da7756;
+  --accent-hover: #c15f3c;
+  --accent-soft-bg: #f4e7de;
+  --accent-soft-border: #e8cdbb;
+  --error: #b23b2e;
+
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "Source Serif 4", Georgia, serif;
+}
 
 * {
   box-sizing: border-box;
@@ -8,20 +26,30 @@
   padding: 0;
 }
 
+/* L'attribut HTML "hidden" doit toujours l'emporter, même sur un élément qui a
+   par ailleurs une règle display:flex/block dans ce fichier (ex: panneaux
+   dépliables) — sans ça, la règle de classe peut écraser "hidden" silencieusement. */
+[hidden] {
+  display: none !important;
+}
+
 body {
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  background-color: #f4f4f5;
-  min-height: 100vh;
+  font-family: var(--font-sans);
+  background-color: var(--bg);
+  height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px;
 }
 
-/* Grille principale : reprend exactement la structure de layout_dashboard_etape1.md */
+/* Grille principale : reprend exactement la structure de layout_dashboard_etape1.md
+   Hauteur explicite (calc sur 100vh) pour que les lignes "1fr" se répartissent
+   sur tout l'écran au lieu de se réduire à la taille du contenu (icônes). */
 .dashboard {
   width: 100%;
-  max-width: 1100px;
+  max-width: 1600px;
+  height: calc(100vh - 40px);
   display: grid;
   grid-template-columns: 1fr 1fr 1fr 0.5fr;
   grid-template-rows: 90px 1fr 90px 1fr;
@@ -35,20 +63,23 @@ body {
 
 /* Bloc neutre par défaut : même style pour les 7 zones non mises en avant */
 .zone {
-  background-color: #ffffff;
-  border: 1px solid #e4e4e7;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #52525b;
+  color: var(--text-muted);
+  /* Empêche tout contenu interne (ex: messages du chat) de pousser la taille
+     de la zone au-delà de sa cellule de grille. */
+  overflow: hidden;
 }
 
 /* Zones mises en avant (suggestion, chat) : seules zones d'interaction directe avec Claude */
 .zone-accent {
-  background-color: #eef2ff;
-  border-color: #c7d2fe;
-  color: #4338ca;
+  background-color: var(--accent-soft-bg);
+  border-color: var(--accent-soft-border);
+  color: var(--accent-hover);
 }
 
 .zone-notes      { grid-area: notes; }
@@ -81,26 +112,28 @@ body {
   width: 100%;
   height: 100%;
   flex: 1;
-  background-color: #ffffff;
-  border: 1px solid #e4e4e7;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  color: #52525b;
+  color: var(--text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .icon-btn:hover {
-  background-color: #f4f4f5;
+  background-color: var(--accent-soft-bg);
+  color: var(--accent-hover);
 }
 
 /* Bouton de bascule provider : couleur accent quand l'API Anthropic (payante) est active,
    pour que ce soit visuellement clair qu'on n'est plus sur Ollama (gratuit) */
 #btn-provider.provider-anthropic {
-  background-color: #eef2ff;
-  border-color: #c7d2fe;
-  color: #4338ca;
+  background-color: var(--accent-soft-bg);
+  border-color: var(--accent-soft-border);
+  color: var(--accent-hover);
 }
 
 /* Zone coûts : cliquable, détail affiché/masqué au clic (icône seule par défaut) */
@@ -112,18 +145,152 @@ body {
 
 .detail-couts {
   font-size: 12px;
-  color: #52525b;
+  color: var(--text-muted);
   text-align: center;
 }
 
 .detail-couts.anomalie {
-  color: #b91c1c;
+  color: var(--error);
   font-weight: 600;
+}
+
+/* Zone calendrier : cliquable pour ouvrir/fermer la liste de la semaine */
+.zone-calendrier {
+  cursor: pointer;
+  min-height: 0;
+}
+
+.zone-calendrier.ouvert {
+  /* Laisse le popover du détail-jour (position: absolute) dépasser de la
+     zone, malgré le overflow:hidden de la règle .zone de base. */
+  overflow: visible;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 10px;
+}
+
+.panneau-calendrier {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Bande des 7 jours, côte à côte, lundi -> dimanche */
+.jours-semaine {
+  display: flex;
+  gap: 4px;
+}
+
+.jour {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 2px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.jour:hover {
+  background-color: var(--accent-soft-bg);
+}
+
+.jour .nom-jour {
+  font-size: 11px;
+  text-transform: capitalize;
+  color: var(--text-muted);
+}
+
+.jour .numero-jour {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.jour.aujourdhui {
+  border-color: var(--accent-soft-border);
+}
+
+.jour.selectionne {
+  background-color: var(--accent-soft-bg);
+  color: var(--accent-hover);
+}
+
+.jour .point-evenement {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: var(--accent-hover);
+  visibility: hidden;
+}
+
+.jour.a-des-evenements .point-evenement {
+  visibility: visible;
+}
+
+/* Détail du jour sélectionné : la ligne de grille du calendrier ne fait que
+   90px de haut (layout figé étape 1), pas la place d'empiler bande de jours
+   + liste d'événements. Le détail flotte donc au-dessus des zones voisines,
+   comme un popover, plutôt que de pousser la hauteur de la zone. */
+.detail-jour {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 10;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+  font-family: var(--font-serif);
+  font-size: 13px;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detail-jour .evenement {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.detail-jour .evenement .heure {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.detail-jour .vide,
+.detail-jour .erreur {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 8px;
+}
+
+.detail-jour .erreur {
+  color: var(--error);
 }
 
 /* Zone chat : cliquable pour ouvrir/fermer le panneau de saisie */
 .zone-chat {
   cursor: pointer;
+  /* Par défaut, un enfant de grille refuse de rétrécir sous la taille de son
+     contenu (min-height: auto implicite) : avec beaucoup de messages, ça
+     pousse toute la ligne de la grille, donc tout le dashboard, à grandir.
+     min-height: 0 autorise la zone à rester à la taille de sa cellule et à
+     laisser .messages-chat scroller en interne à la place. */
+  min-height: 0;
 }
 
 .zone-chat.ouvert {
@@ -137,20 +304,25 @@ body {
   flex-direction: column;
   width: 100%;
   height: 100%;
+  min-height: 0;
   gap: 8px;
 }
 
 .messages-chat {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  font-size: 13px;
+  font-family: var(--font-serif);
+  font-size: 14px;
+  color: var(--text);
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
 .messages-chat .message {
-  background-color: #ffffff;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 6px 10px;
   max-width: 80%;
@@ -158,14 +330,87 @@ body {
 
 .messages-chat .message.utilisateur {
   align-self: flex-end;
-  background-color: #c7d2fe;
+  background-color: var(--accent-soft-bg);
+  border-color: var(--accent-soft-border);
+  color: var(--accent-hover);
+}
+
+.messages-chat .message.erreur {
+  color: var(--error);
+  border-color: var(--error);
+}
+
+/* Mise en forme du Markdown rendu dans les réponses de Claude (voir marked.js) */
+.messages-chat .message p {
+  margin: 0 0 8px;
+}
+
+.messages-chat .message p:last-child {
+  margin-bottom: 0;
+}
+
+.messages-chat .message h1,
+.messages-chat .message h2,
+.messages-chat .message h3 {
+  font-weight: 600;
+  font-size: 1.05em;
+  margin: 10px 0 6px;
+}
+
+.messages-chat .message h1:first-child,
+.messages-chat .message h2:first-child,
+.messages-chat .message h3:first-child {
+  margin-top: 0;
+}
+
+.messages-chat .message ul,
+.messages-chat .message ol {
+  margin: 0 0 8px 18px;
+}
+
+.messages-chat .message li {
+  margin-bottom: 2px;
+}
+
+.messages-chat .message strong {
+  font-weight: 600;
+  color: var(--accent-hover);
+}
+
+.messages-chat .message code {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  background-color: var(--accent-soft-bg);
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+.messages-chat .message pre {
+  background-color: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  overflow-x: auto;
+  margin: 0 0 8px;
+}
+
+.messages-chat .message pre code {
+  background: none;
+  padding: 0;
 }
 
 #form-chat input {
   width: 100%;
-  border: 1px solid #c7d2fe;
+  border: 1px solid var(--accent-soft-border);
   border-radius: 8px;
   padding: 8px 10px;
-  font-family: inherit;
+  font-family: var(--font-sans);
   font-size: 13px;
+  color: var(--text);
+  background-color: var(--surface);
+}
+
+#form-chat input:focus {
+  outline: none;
+  border-color: var(--accent);
 }

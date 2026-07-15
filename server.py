@@ -9,6 +9,7 @@ from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
 
+from calendar_mcp import ServeurCalendarIndisponibleError, lister_evenements_semaine
 from costs import etat_couts
 from ia_provider import (
     CleManquanteError,
@@ -45,9 +46,9 @@ def assets(chemin):
 
 @app.route("/api/chat", methods=["POST"])
 def chat():
-    message = (request.json or {}).get("message", "")
+    historique = (request.json or {}).get("historique", [])
     try:
-        reponse = generer_reponse(message)
+        reponse = generer_reponse(historique)
     except CoutBloqueError as erreur:
         return jsonify({"erreur": str(erreur), "anomalie": True}), 402
     except CleManquanteError as erreur:
@@ -70,6 +71,15 @@ def basculer_provider():
 @app.route("/api/costs", methods=["GET"])
 def couts():
     return jsonify(etat_couts())
+
+
+@app.route("/api/calendar", methods=["GET"])
+def calendrier():
+    try:
+        evenements_json = lister_evenements_semaine()
+    except ServeurCalendarIndisponibleError as erreur:
+        return jsonify({"erreur": str(erreur)}), 503
+    return app.response_class(evenements_json, mimetype="application/json")
 
 
 if __name__ == "__main__":

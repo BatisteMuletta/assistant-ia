@@ -20,8 +20,13 @@ load_dotenv()
 BASE_DIR = Path(__file__).parent
 CONFIG_PATH = BASE_DIR / "config.json"
 
-MODELE_OLLAMA = "llama3.2:3b"
+MODELE_OLLAMA = "llama3.2:1b"  # version allégée (1.3 Go vs 2.0 Go) — RAM machine limitée
 MODELE_ANTHROPIC = "claude-haiku-4-5-20251001"  # modèle le moins cher, cohérent avec le budget serré
+
+# Nombre de messages d'historique conservés pour le contexte envoyé au modèle.
+# Limite le coût par message sur l'API Anthropic (payante) — au-delà, les échanges
+# trop anciens sont oubliés plutôt que renvoyés à chaque appel.
+MAX_HISTORIQUE = 5
 
 
 class CoutBloqueError(Exception):
@@ -42,24 +47,28 @@ def ecrire_provider(provider):
     CONFIG_PATH.write_text(json.dumps({"provider": provider}, indent=2))
 
 
-def generer_reponse(message):
+def generer_reponse(historique):
+    """historique : liste de {"role": "user"|"assistant", "content": str},
+    dans l'ordre chronologique — nécessaire pour que le modèle garde le contexte
+    de la conversation d'un message à l'autre (voir CLAUDE.md / bug "d'autres")."""
+    historique = historique[-MAX_HISTORIQUE:]
     provider = lire_provider()
     if provider == "anthropic":
-        return _appel_anthropic(message)
-    return _appel_ollama(message)
+        return _appel_anthropic(historique)
+    return _appel_ollama(historique)
 
 
-def _appel_ollama(message):
+def _appel_ollama(historique):
     reponse = requests.post(
-        "http://localhost:11434/api/generate",
-        json={"model": MODELE_OLLAMA, "prompt": message, "stream": False},
+        "http://localhost:11434/api/chat",
+        json={"model": MODELE_OLLAMA, "messages": historique, "stream": False},
         timeout=60,
     )
     reponse.raise_for_status()
-    return reponse.json()["response"]
+    return reponse.json()["message"]["content"]
 
 
-def _appel_anthropic(message):
+def _appel_anthropic(historique):
     if get_total_spent() >= SEUIL_ANOMALIE:
         raise CoutBloqueError(
             f"Seuil de secours de {SEUIL_ANOMALIE}$ atteint ce mois-ci — appel bloqué. "
@@ -77,7 +86,7 @@ def _appel_anthropic(message):
     reponse = client.messages.create(
         model=MODELE_ANTHROPIC,
         max_tokens=1024,
-        messages=[{"role": "user", "content": message}],
+        messages=historique,
     )
     log_cost(calculer_cout(reponse.usage))
     return reponse.content[0].text

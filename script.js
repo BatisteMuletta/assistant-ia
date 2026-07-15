@@ -13,6 +13,11 @@ const messagesChat = document.getElementById("messages-chat");
 const formChat = document.getElementById("form-chat");
 const saisieChat = document.getElementById("saisie-chat");
 
+// Historique de la conversation en cours (remis à zéro si la page est rechargée).
+// Envoyé en entier à chaque message pour que Claude garde le contexte
+// (sinon chaque message est traité isolément, voir bug "d'autres" incohérent).
+let historique = [];
+
 zoneChat.addEventListener("click", () => {
   const estOuvert = zoneChat.classList.toggle("ouvert");
   panneauChat.hidden = !estOuvert;
@@ -27,13 +32,14 @@ formChat.addEventListener("submit", async (evenement) => {
   if (!message) return;
 
   ajouterMessage(message, "utilisateur");
+  historique.push({ role: "user", content: message });
   saisieChat.value = "";
 
   try {
     const reponse = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ historique }),
     });
     const donnees = await reponse.json();
     if (!reponse.ok) {
@@ -41,6 +47,7 @@ formChat.addEventListener("submit", async (evenement) => {
       return;
     }
     ajouterMessage(donnees.reponse, "assistant");
+    historique.push({ role: "assistant", content: donnees.reponse });
   } catch {
     ajouterMessage("Impossible de joindre le serveur local.", "erreur");
   }
@@ -52,7 +59,14 @@ panneauChat.addEventListener("click", (evenement) => evenement.stopPropagation()
 function ajouterMessage(texte, type) {
   const bulle = document.createElement("div");
   bulle.className = `message ${type}`;
-  bulle.textContent = texte;
+  if (type === "assistant") {
+    // Réponse de Claude : contient du Markdown (#, **, listes...) -> on le
+    // transforme en HTML, puis DOMPurify retire tout ce qui pourrait exécuter
+    // du code (balises <script>, attributs onclick...).
+    bulle.innerHTML = DOMPurify.sanitize(marked.parse(texte));
+  } else {
+    bulle.textContent = texte;
+  }
   messagesChat.appendChild(bulle);
   messagesChat.scrollTop = messagesChat.scrollHeight;
 }
@@ -106,6 +120,163 @@ async function rafraichirCouts() {
   } else {
     detailCouts.textContent = `${donnees.depense}$ / ${donnees.seuil_principal}$`;
     detailCouts.classList.remove("anomalie");
+  }
+}
+
+// --- Calendrier (icône seule par défaut, bande de 7 jours au clic) ---
+const zoneCalendrier = document.getElementById("zone-calendrier");
+const panneauCalendrier = document.getElementById("panneau-calendrier");
+const iconeCalendrier = document.getElementById("icone-calendrier");
+const joursSemaine = document.getElementById("jours-semaine");
+const detailJour = document.getElementById("detail-jour");
+
+let evenementsParJour = new Map(); // clé "AAAA-MM-JJ" -> tableau d'événements ce jour-là
+let jourSelectionne = null; // clé "AAAA-MM-JJ" du jour actuellement déroulé, ou null
+
+zoneCalendrier.addEventListener("click", async () => {
+  const estOuvert = zoneCalendrier.classList.toggle("ouvert");
+  panneauCalendrier.hidden = !estOuvert;
+  iconeCalendrier.hidden = estOuvert;
+  if (estOuvert) await rafraichirCalendrier();
+});
+
+// Empêche le clic dans le panneau de refermer le calendrier (comme pour le chat)
+panneauCalendrier.addEventListener("click", (evenement) => evenement.stopPropagation());
+
+function cleJour(date) {
+  // "AAAA-MM-JJ" en heure locale (pas toISOString, qui repasse en UTC et peut changer de jour)
+  const annee = date.getFullYear();
+  const mois = String(date.getMonth() + 1).padStart(2, "0");
+  const jour = String(date.getDate()).padStart(2, "0");
+  return `${annee}-${mois}-${jour}`;
+}
+
+function joursDeLaSemaineCourante() {
+  const aujourdhui = new Date();
+  // getDay() : dimanche=0 ... samedi=6 -> on veut commencer le lundi
+  const decalageLundi = (aujourdhui.getDay() + 6) % 7;
+  const lundi = new Date(aujourdhui);
+  lundi.setDate(aujourdhui.getDate() - decalageLundi);
+  lundi.setHours(0, 0, 0, 0);
+
+  const jours = [];
+  for (let i = 0; i < 7; i++) {
+    const jour = new Date(lundi);
+    jour.setDate(lundi.getDate() + i);
+    jours.push(jour);
+  }
+  return jours;
+}
+
+function formaterHeure(evenement) {
+  if (!evenement.start.dateTime) return "Journée entière";
+  return new Date(evenement.start.dateTime).toLocaleString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function afficherDetailJour(cle, dateJour) {
+  detailJour.textContent = "";
+  const evenements = evenementsParJour.get(cle) || [];
+
+  if (evenements.length === 0) {
+    const vide = document.createElement("div");
+    vide.className = "vide";
+    vide.textContent = "Aucun événement ce jour.";
+    detailJour.appendChild(vide);
+  } else {
+    for (const evenement of evenements) {
+      const bloc = document.createElement("div");
+      bloc.className = "evenement";
+      const heure = document.createElement("div");
+      heure.className = "heure";
+      heure.textContent = formaterHeure(evenement);
+      const titre = document.createElement("div");
+      titre.textContent = evenement.summary || "(Sans titre)";
+      bloc.appendChild(heure);
+      bloc.appendChild(titre);
+      detailJour.appendChild(bloc);
+    }
+  }
+  detailJour.hidden = false;
+}
+
+function construireBandeJours() {
+  joursSemaine.textContent = "";
+  const aujourdhuiCle = cleJour(new Date());
+
+  for (const date of joursDeLaSemaineCourante()) {
+    const cle = cleJour(date);
+    const aDesEvenements = evenementsParJour.has(cle);
+
+    const cellule = document.createElement("div");
+    cellule.className = "jour";
+    if (cle === aujourdhuiCle) cellule.classList.add("aujourdhui");
+    if (aDesEvenements) cellule.classList.add("a-des-evenements");
+    if (cle === jourSelectionne) cellule.classList.add("selectionne");
+
+    const nomJour = document.createElement("div");
+    nomJour.className = "nom-jour";
+    nomJour.textContent = date.toLocaleDateString("fr-FR", { weekday: "short" });
+
+    const numeroJour = document.createElement("div");
+    numeroJour.className = "numero-jour";
+    numeroJour.textContent = date.getDate();
+
+    const point = document.createElement("div");
+    point.className = "point-evenement";
+
+    cellule.appendChild(nomJour);
+    cellule.appendChild(numeroJour);
+    cellule.appendChild(point);
+
+    cellule.addEventListener("click", () => {
+      if (jourSelectionne === cle) {
+        // Reclic sur le même jour -> referme le détail
+        jourSelectionne = null;
+        detailJour.hidden = true;
+      } else {
+        jourSelectionne = cle;
+        afficherDetailJour(cle, date);
+      }
+      construireBandeJours(); // remet à jour la mise en surbrillance du jour sélectionné
+    });
+
+    joursSemaine.appendChild(cellule);
+  }
+}
+
+async function rafraichirCalendrier() {
+  evenementsParJour = new Map();
+  jourSelectionne = null;
+  detailJour.hidden = true;
+  detailJour.textContent = "";
+
+  try {
+    const reponse = await fetch("/api/calendar");
+    const donnees = await reponse.json();
+    if (!reponse.ok) {
+      construireBandeJours();
+      detailJour.textContent = "";
+      const erreur = document.createElement("div");
+      erreur.className = "erreur";
+      erreur.textContent = donnees.erreur || "Calendrier indisponible.";
+      detailJour.appendChild(erreur);
+      detailJour.hidden = false;
+      return;
+    }
+    for (const evenement of donnees.events || []) {
+      const debut = evenement.start.dateTime || evenement.start.date;
+      const cle = cleJour(new Date(debut));
+      if (!evenementsParJour.has(cle)) evenementsParJour.set(cle, []);
+      evenementsParJour.get(cle).push(evenement);
+    }
+    construireBandeJours();
+  } catch {
+    construireBandeJours();
+    const erreur = document.createElement("div");
+    erreur.className = "erreur";
+    erreur.textContent = "Impossible de joindre le serveur local.";
+    detailJour.appendChild(erreur);
+    detailJour.hidden = false;
   }
 }
 
