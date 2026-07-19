@@ -280,4 +280,285 @@ async function rafraichirCalendrier() {
   }
 }
 
+// --- Gmail (icône seule par défaut, liste au clic) ---
+const zoneGmail = document.getElementById("zone-gmail");
+const panneauGmail = document.getElementById("panneau-gmail");
+const iconeGmail = document.getElementById("icone-gmail");
+const listeEmails = document.getElementById("liste-emails");
+
+zoneGmail.addEventListener("click", async () => {
+  const estOuvert = zoneGmail.classList.toggle("ouvert");
+  panneauGmail.hidden = !estOuvert;
+  iconeGmail.hidden = estOuvert;
+  if (estOuvert) await rafraichirGmail();
+});
+
+// Empêche le clic dans le panneau de refermer Gmail (comme pour le chat et le calendrier)
+panneauGmail.addEventListener("click", (evenement) => evenement.stopPropagation());
+
+function afficherMessageListeEmails(texte, classe) {
+  listeEmails.textContent = "";
+  const bloc = document.createElement("div");
+  bloc.className = classe;
+  bloc.textContent = texte;
+  listeEmails.appendChild(bloc);
+}
+
+async function rafraichirGmail() {
+  afficherMessageListeEmails("Chargement…", "vide");
+
+  try {
+    const reponse = await fetch("/api/gmail");
+    const donnees = await reponse.json();
+    if (!reponse.ok) {
+      afficherMessageListeEmails(donnees.erreur || "Gmail indisponible.", "erreur");
+      return;
+    }
+    if (donnees.length === 0) {
+      afficherMessageListeEmails("Aucun mail récent.", "vide");
+      return;
+    }
+
+    listeEmails.textContent = "";
+    // Tri stable : les urgents remontent en premier, sans mélanger l'ordre entre eux
+    const emailsTries = [...donnees].sort((a, b) => (b.urgent === true) - (a.urgent === true));
+    for (const email of emailsTries) {
+      const bloc = document.createElement("div");
+      bloc.className = "email" + (email.urgent ? " urgent" : "");
+
+      const sujet = document.createElement("div");
+      sujet.className = "sujet";
+      sujet.textContent = email.sujet || "(Sans sujet)";
+
+      const expediteur = document.createElement("div");
+      expediteur.className = "expediteur";
+      expediteur.textContent = email.expediteur;
+
+      const corps = document.createElement("div");
+      corps.className = "corps-email";
+      corps.hidden = true;
+
+      const zoneReponse = creerZoneReponse(email);
+
+      bloc.appendChild(sujet);
+      bloc.appendChild(expediteur);
+      bloc.appendChild(corps);
+      bloc.appendChild(zoneReponse);
+
+      bloc.addEventListener("click", () => ouvrirFermerEmail(email, corps, zoneReponse));
+
+      listeEmails.appendChild(bloc);
+    }
+  } catch {
+    afficherMessageListeEmails("Impossible de joindre le serveur local.", "erreur");
+  }
+}
+
+async function ouvrirFermerEmail(email, conteneurCorps, zoneReponse) {
+  const doitFermer = !conteneurCorps.hidden;
+  conteneurCorps.hidden = doitFermer;
+  zoneReponse.hidden = doitFermer;
+  if (doitFermer) return;
+
+  // Chargé une seule fois par mail, mis en cache dans le DOM (dataset.charge)
+  if (conteneurCorps.dataset.charge) return;
+  conteneurCorps.textContent = "Chargement…";
+
+  try {
+    const reponse = await fetch(`/api/gmail/${encodeURIComponent(email.id)}`);
+    const donnees = await reponse.json();
+    if (!reponse.ok) {
+      conteneurCorps.textContent = donnees.erreur || "Impossible de charger ce mail.";
+      return;
+    }
+    conteneurCorps.textContent = donnees.corps || "(Corps vide)";
+    conteneurCorps.dataset.charge = "1";
+  } catch {
+    conteneurCorps.textContent = "Impossible de joindre le serveur local.";
+  }
+}
+
+// Construit le bloc "Répondre" d'un mail : brouillon généré par l'IA (Ollama/Claude
+// selon le provider actif), toujours éditable, jamais envoyé sans clic explicite sur
+// "Envoyer" (règle du cahier des charges : validation + bouton d'envoi obligatoire).
+function creerZoneReponse(email) {
+  const zone = document.createElement("div");
+  zone.className = "zone-reponse";
+  zone.hidden = true;
+  // Empêche tout clic à l'intérieur (y compris taper dans le brouillon) de
+  // remonter jusqu'au bloc email et de refermer le mail (comme pour les autres panneaux)
+  zone.addEventListener("click", (evenement) => evenement.stopPropagation());
+
+  const btnRepondre = document.createElement("button");
+  btnRepondre.type = "button";
+  btnRepondre.className = "btn-repondre";
+  btnRepondre.textContent = "Répondre";
+
+  const zoneBrouillon = document.createElement("div");
+  zoneBrouillon.className = "zone-brouillon";
+  zoneBrouillon.hidden = true;
+
+  const texteBrouillon = document.createElement("textarea");
+  texteBrouillon.className = "texte-brouillon";
+  texteBrouillon.rows = 6;
+
+  const btnEnvoyer = document.createElement("button");
+  btnEnvoyer.type = "button";
+  btnEnvoyer.className = "btn-envoyer";
+  btnEnvoyer.textContent = "Envoyer";
+
+  const statut = document.createElement("div");
+  statut.className = "statut-envoi";
+
+  zoneBrouillon.appendChild(texteBrouillon);
+  zoneBrouillon.appendChild(btnEnvoyer);
+  zoneBrouillon.appendChild(statut);
+  zone.appendChild(btnRepondre);
+  zone.appendChild(zoneBrouillon);
+
+  btnRepondre.addEventListener("click", async () => {
+    btnRepondre.hidden = true;
+    zoneBrouillon.hidden = false;
+    texteBrouillon.disabled = true;
+    texteBrouillon.value = "Génération du brouillon…";
+
+    try {
+      const reponse = await fetch(`/api/gmail/${encodeURIComponent(email.id)}/draft`, { method: "POST" });
+      const donnees = await reponse.json();
+      if (!reponse.ok) {
+        texteBrouillon.value = "";
+        statut.textContent = donnees.erreur || "Impossible de générer un brouillon.";
+        statut.className = "statut-envoi erreur";
+        btnRepondre.hidden = false;
+        zoneBrouillon.hidden = true;
+        return;
+      }
+      texteBrouillon.value = donnees.brouillon;
+    } catch {
+      texteBrouillon.value = "";
+      statut.textContent = "Impossible de joindre le serveur local.";
+      statut.className = "statut-envoi erreur";
+      btnRepondre.hidden = false;
+      zoneBrouillon.hidden = true;
+      return;
+    }
+    texteBrouillon.disabled = false;
+  });
+
+  btnEnvoyer.addEventListener("click", async () => {
+    const corpsReponse = texteBrouillon.value.trim();
+    if (!corpsReponse) return;
+    btnEnvoyer.disabled = true;
+    statut.textContent = "Envoi…";
+    statut.className = "statut-envoi";
+
+    try {
+      const reponse = await fetch(`/api/gmail/${encodeURIComponent(email.id)}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ corps: corpsReponse }),
+      });
+      const donnees = await reponse.json();
+      if (!reponse.ok) {
+        statut.textContent = donnees.erreur || "Échec de l'envoi.";
+        statut.className = "statut-envoi erreur";
+        btnEnvoyer.disabled = false;
+        return;
+      }
+      statut.textContent = "Envoyé.";
+      statut.className = "statut-envoi succes";
+      texteBrouillon.disabled = true;
+    } catch {
+      statut.textContent = "Impossible de joindre le serveur local.";
+      statut.className = "statut-envoi erreur";
+      btnEnvoyer.disabled = false;
+    }
+  });
+
+  return zone;
+}
+
+// --- Suggestions / briefing du matin (icône seule par défaut, généré au clic) ---
+const zoneSuggestion = document.getElementById("zone-suggestion");
+const panneauSuggestion = document.getElementById("panneau-suggestion");
+const iconeSuggestion = document.getElementById("icone-suggestion");
+const texteBriefing = document.getElementById("texte-briefing");
+const listeDeadlines = document.getElementById("liste-deadlines");
+
+zoneSuggestion.addEventListener("click", async () => {
+  const estOuvert = zoneSuggestion.classList.toggle("ouvert");
+  panneauSuggestion.hidden = !estOuvert;
+  iconeSuggestion.hidden = estOuvert;
+  if (estOuvert) await rafraichirBriefing();
+});
+
+// Empêche le clic dans le panneau de refermer la zone (comme pour les autres panneaux)
+panneauSuggestion.addEventListener("click", (evenement) => evenement.stopPropagation());
+
+async function rafraichirBriefing() {
+  texteBriefing.textContent = "Génération du briefing…";
+  listeDeadlines.textContent = "";
+
+  try {
+    const reponse = await fetch("/api/briefing", { method: "POST" });
+    const donnees = await reponse.json();
+    if (!reponse.ok) {
+      texteBriefing.textContent = donnees.erreur || "Briefing indisponible.";
+      return;
+    }
+
+    // Le texte du briefing contient du Markdown, comme les réponses du chat : même
+    // traitement (marked -> HTML, puis DOMPurify pour retirer tout code exécutable).
+    texteBriefing.innerHTML = DOMPurify.sanitize(marked.parse(donnees.texte || ""));
+
+    listeDeadlines.textContent = "";
+    for (const deadline of donnees.deadlines || []) {
+      listeDeadlines.appendChild(creerLigneDeadline(deadline));
+    }
+  } catch {
+    texteBriefing.textContent = "Impossible de joindre le serveur local.";
+  }
+}
+
+function creerLigneDeadline(deadline) {
+  const ligne = document.createElement("div");
+  ligne.className = "deadline";
+
+  const info = document.createElement("div");
+  info.className = "deadline-info";
+  const quand = deadline.heure ? `${deadline.date} à ${deadline.heure}` : deadline.date;
+  info.textContent = `${deadline.titre} — ${quand}`;
+
+  const bouton = document.createElement("button");
+  bouton.type = "button";
+  bouton.className = "btn-ajouter-deadline";
+  bouton.textContent = "Ajouter au calendrier";
+
+  bouton.addEventListener("click", async () => {
+    bouton.disabled = true;
+    bouton.textContent = "Ajout…";
+    try {
+      const reponse = await fetch("/api/briefing/deadline", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ titre: deadline.titre, date: deadline.date, heure: deadline.heure }),
+      });
+      const donnees = await reponse.json();
+      if (!reponse.ok) {
+        bouton.textContent = donnees.erreur || "Échec de l'ajout";
+        bouton.disabled = false;
+        return;
+      }
+      bouton.textContent = "Ajouté ✓";
+    } catch {
+      bouton.textContent = "Serveur local injoignable";
+      bouton.disabled = false;
+    }
+  });
+
+  ligne.appendChild(info);
+  ligne.appendChild(bouton);
+  return ligne;
+}
+
 chargerProviderInitial();

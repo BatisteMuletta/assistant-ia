@@ -1,23 +1,36 @@
 /* Dashboard — style.css
    Layout validé dans layout_dashboard_etape1.md : grille asymétrique 9 zones,
-   identifiées par icônes uniquement.
-   DA alignée sur l'app Claude (claude.ai) : fond crème chaud, accent terracotta,
-   sans-serif pour l'interface, serif pour le texte de conversation. */
+   identifiées par icônes uniquement (aucune proportion de grid-template-areas
+   modifiée, seuls tailles/gap/rayons ont été ajustés).
+
+   DA : chaque zone porte sa propre couleur ("module de contrôle" façon pupitre
+   d'instruments) — vert pour les tâches, bleu pour le mail, violet pour le
+   calendrier, or pour les coûts, rose pour les notes. Seules les zones où
+   Claude parle vraiment (chat + suggestions) partagent la même famille
+   orange/corail : c'est la couleur "voix de Claude" du dashboard, pas une
+   couleur de marque déclinée partout. Le reste (fond, texte, accent d'action
+   pour les boutons) reste neutre et cohérent d'une zone à l'autre. */
 
 :root {
-  --bg: #faf9f5;
-  --surface: #ffffff;
-  --border: #e5e4df;
-  --text: #30302e;
-  --text-muted: #83827d;
-  --accent: #da7756;
-  --accent-hover: #c15f3c;
-  --accent-soft-bg: #f4e7de;
-  --accent-soft-border: #e8cdbb;
-  --error: #b23b2e;
+  --bg: #f3e9da;
+  --surface: #fffcf5;
+  --border: #e7dcc7;
+  --text: #2b231c;
+  --text-muted: #8c7f6c;
+  --error: #b3392b;
+
+  /* Accent d'action : utilisé pour les boutons/liens/focus, indépendamment
+     de la couleur de zone (ex: bouton "Envoyer" dans le mail bleu). */
+  --accent: #e0653a;
+  --accent-hover: #c24e27;
+  --accent-soft-bg: #f7dfcf;
+  --accent-soft-border: #eabe9e;
 
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-serif: "Source Serif 4", Georgia, serif;
+  --font-serif: "Fraunces", Georgia, serif;
+
+  --rayon: 16px;
+  --rayon-petit: 10px;
 }
 
 * {
@@ -35,12 +48,23 @@
 
 body {
   font-family: var(--font-sans);
-  background-color: var(--bg);
+  color: var(--text);
   height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px;
+  /* Fond chaud avec une lueur très légère en haut à gauche, comme une pièce
+     éclairée tôt le matin plutôt qu'un aplat plat. */
+  background-color: var(--bg);
+  background-image: radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.55), transparent 45%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
 }
 
 /* Grille principale : reprend exactement la structure de layout_dashboard_etape1.md
@@ -51,52 +75,108 @@ body {
   max-width: 1600px;
   height: calc(100vh - 40px);
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 0.5fr;
-  grid-template-rows: 90px 1fr 90px 1fr;
+  grid-template-columns: 1.1fr 1fr 1fr 0.6fr;
+  grid-template-rows: 104px 1fr 100px 1fr;
   grid-template-areas:
     "notes taches gmail gmail"
     "suggestion suggestion gmail gmail"
     "suggestion suggestion calendrier calendrier"
     "chat chat couts misc";
-  gap: 10px;
+  gap: 14px;
 }
 
-/* Bloc neutre par défaut : même style pour les 7 zones non mises en avant */
+/* Bloc neutre par défaut, chaque zone reçoit sa teinte via --zone-core/soft/border
+   (défini plus bas par zone) ; les variables retombent sur le neutre si absentes. */
 .zone {
-  background-color: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  /* Un souffle de la couleur de la zone dans le fond, même au repos —
+     sinon la carte reste blanche jusqu'au clic et le "vivant" ne se voit
+     qu'à l'ouverture. */
+  background-color: color-mix(in srgb, var(--surface) 86%, var(--zone-soft, var(--surface)) 14%);
+  border: 1px solid var(--zone-border, var(--border));
+  border-radius: var(--rayon);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  /* Empêche tout contenu interne (ex: messages du chat) de pousser la taille
-     de la zone au-delà de sa cellule de grille. */
   overflow: hidden;
+  cursor: default;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease,
+    transform 0.15s ease, opacity 0.2s ease, filter 0.2s ease;
 }
 
-/* Zones mises en avant (suggestion, chat) : seules zones d'interaction directe avec Claude */
-.zone-accent {
-  background-color: var(--accent-soft-bg);
-  border-color: var(--accent-soft-border);
-  color: var(--accent-hover);
+/* Zones cliquables (toutes sauf notes/tâches, pas encore branchées) : lift discret
+   au survol, comme un bouton de pupitre qu'on s'apprête à presser. */
+.zone-gmail:hover,
+.zone-suggestion:hover,
+.zone-calendrier:hover,
+.zone-chat:hover,
+.zone-couts:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px -14px rgba(43, 35, 28, 0.35);
+  border-color: var(--zone-border);
 }
 
-.zone-notes      { grid-area: notes; }
-.zone-taches     { grid-area: taches; }
-.zone-gmail      { grid-area: gmail; }
-.zone-suggestion { grid-area: suggestion; }
-.zone-calendrier { grid-area: calendrier; }
-.zone-chat       { grid-area: chat; }
-.zone-couts      { grid-area: couts; }
+/* Ouverture d'une zone : bascule vers sa teinte + halo coloré, comme un bouton
+   de pupitre pressé qui s'allume. */
+.zone.ouvert {
+  background-color: var(--zone-soft, var(--surface));
+  border-color: var(--zone-border, var(--border));
+  box-shadow: 0 0 0 3px var(--zone-border, transparent), 0 16px 32px -18px rgba(43, 35, 28, 0.4);
+  animation: zone-bloom 0.28s ease-out;
+}
 
-/* Icônes des zones principales */
+@keyframes zone-bloom {
+  from { transform: scale(0.97); }
+  to { transform: scale(1); }
+}
+
+/* Pendant qu'une zone est ouverte, les autres s'estompent légèrement pour créer
+   un point de focus — sans jamais toucher au JS (pur CSS via :has()). */
+.dashboard:has(.zone.ouvert) .zone:not(.ouvert) {
+  opacity: 0.55;
+  filter: saturate(0.7);
+}
+
+.zone-notes      { grid-area: notes;      --zone-core: #a14e6b; --zone-soft: #f5dee6; --zone-border: #e4b9cb; }
+.zone-taches     { grid-area: taches;     --zone-core: #3c7554; --zone-soft: #deeee2; --zone-border: #b7d9c1; }
+.zone-gmail      { grid-area: gmail;      --zone-core: #33628c; --zone-soft: #dce9f4; --zone-border: #b3cee5; }
+.zone-suggestion { grid-area: suggestion; --zone-core: var(--accent-hover); --zone-soft: var(--accent-soft-bg); --zone-border: var(--accent-soft-border); }
+.zone-calendrier { grid-area: calendrier; --zone-core: #6c4e96; --zone-soft: #eae2f3; --zone-border: #d1bee5; }
+.zone-chat       { grid-area: chat;       --zone-core: #9c3b1e; --zone-soft: #f0d8c9; --zone-border: #dfae8c; }
+.zone-couts      { grid-area: couts;      --zone-core: #8c6d1f; --zone-soft: #efe3c4; --zone-border: #dcc489; }
+
+/* Pastille colorée autour de chaque icône : le "module" visible même au repos.
+   Se masque proprement quand l'icône qu'elle contient passe hidden (panneau
+   ouvert), sans dépendre du JS. */
+.icone-chip {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--zone-soft, var(--accent-soft-bg));
+  color: var(--zone-core, var(--accent-hover));
+  border: 1px solid var(--zone-border, var(--accent-soft-border));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 2px rgba(43, 35, 28, 0.12);
+  transition: transform 0.15s ease;
+}
+
+.icone-chip:has(svg[hidden]) {
+  display: none;
+}
+
+.zone:hover .icone-chip {
+  transform: scale(1.05);
+}
+
 .zone svg {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
 }
 
-/* Colonne étroite "misc" : journal + stats, deux mini-icônes empilées */
+/* Colonne étroite "misc" : journal + stats + bascule provider, en teinte
+   sourde et neutre — ce sont des outils, pas des modules de contenu. */
 .zone-misc {
   grid-area: misc;
   background: none;
@@ -106,6 +186,9 @@ body {
   gap: 10px;
   align-items: center;
   justify-content: center;
+  --zone-core: #5b6b6e;
+  --zone-soft: #e4eaea;
+  --zone-border: #c9d5d5;
 }
 
 .icon-btn {
@@ -114,22 +197,26 @@ body {
   flex: 1;
   background-color: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--rayon-petit);
   color: var(--text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
 .icon-btn:hover {
-  background-color: var(--accent-soft-bg);
-  color: var(--accent-hover);
+  background-color: var(--zone-soft);
+  border-color: var(--zone-border);
+  color: var(--zone-core);
+  transform: translateY(-1px);
 }
 
-/* Bouton de bascule provider : couleur accent quand l'API Anthropic (payante) est active,
-   pour que ce soit visuellement clair qu'on n'est plus sur Ollama (gratuit) */
+/* Bouton de bascule provider : suit la famille de couleur "voix de Claude"
+   (comme chat/suggestion) quand l'API Anthropic payante est active — signal
+   visuel clair qu'on n'est plus sur Ollama (gratuit, teinte neutre du reste
+   de la colonne misc). */
 #btn-provider.provider-anthropic {
   background-color: var(--accent-soft-bg);
   border-color: var(--accent-soft-border);
@@ -144,14 +231,19 @@ body {
 }
 
 .detail-couts {
-  font-size: 12px;
-  color: var(--text-muted);
+  font-family: var(--font-serif);
+  font-size: 15px;
+  font-weight: 600;
+  font-variation-settings: "opsz" 20;
+  color: var(--zone-core);
   text-align: center;
 }
 
 .detail-couts.anomalie {
-  color: var(--error);
+  font-family: var(--font-sans);
+  font-size: 12px;
   font-weight: 600;
+  color: var(--error);
 }
 
 /* Zone calendrier : cliquable pour ouvrir/fermer la liste de la semaine */
@@ -192,13 +284,14 @@ body {
   align-items: center;
   gap: 4px;
   padding: 6px 2px;
-  border-radius: 8px;
+  border-radius: var(--rayon-petit);
   cursor: pointer;
   border: 1px solid transparent;
+  transition: background-color 0.15s ease;
 }
 
 .jour:hover {
-  background-color: var(--accent-soft-bg);
+  background-color: var(--zone-soft);
 }
 
 .jour .nom-jour {
@@ -208,24 +301,30 @@ body {
 }
 
 .jour .numero-jour {
-  font-size: 13px;
-  font-weight: 500;
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-variation-settings: "opsz" 18;
+  font-size: 15px;
+  color: var(--text);
 }
 
 .jour.aujourdhui {
-  border-color: var(--accent-soft-border);
+  border-color: var(--zone-border);
 }
 
 .jour.selectionne {
-  background-color: var(--accent-soft-bg);
-  color: var(--accent-hover);
+  background-color: var(--zone-soft);
+}
+
+.jour.selectionne .numero-jour {
+  color: var(--zone-core);
 }
 
 .jour .point-evenement {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background-color: var(--accent-hover);
+  background-color: var(--zone-core);
   visibility: hidden;
 }
 
@@ -234,7 +333,7 @@ body {
 }
 
 /* Détail du jour sélectionné : la ligne de grille du calendrier ne fait que
-   90px de haut (layout figé étape 1), pas la place d'empiler bande de jours
+   ~100px de haut (layout figé étape 1), pas la place d'empiler bande de jours
    + liste d'événements. Le détail flotte donc au-dessus des zones voisines,
    comme un popover, plutôt que de pousser la hauteur de la zone. */
 .detail-jour {
@@ -244,8 +343,8 @@ body {
   right: 0;
   z-index: 10;
   background-color: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  border: 1px solid var(--zone-border);
+  border-radius: var(--rayon-petit);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
   padding: 8px;
   max-height: 180px;
@@ -266,12 +365,14 @@ body {
 }
 
 .detail-jour .evenement .heure {
+  font-family: var(--font-sans);
   font-size: 11px;
   color: var(--text-muted);
 }
 
 .detail-jour .vide,
 .detail-jour .erreur {
+  font-family: var(--font-sans);
   font-size: 13px;
   color: var(--text-muted);
   text-align: center;
@@ -280,6 +381,246 @@ body {
 
 .detail-jour .erreur {
   color: var(--error);
+}
+
+/* Zone Gmail : cliquable pour ouvrir/fermer la liste des derniers mails */
+.zone-gmail {
+  cursor: pointer;
+  min-height: 0;
+}
+
+.zone-gmail.ouvert {
+  flex-direction: column;
+  align-items: stretch;
+  padding: 10px;
+}
+
+.panneau-gmail {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.liste-emails {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  font-family: var(--font-serif);
+  font-size: 13px;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.liste-emails .email {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--rayon-petit);
+  padding: 6px 10px;
+  transition: border-color 0.15s ease;
+}
+
+.liste-emails .email:hover {
+  border-color: var(--zone-border);
+}
+
+.liste-emails .email .sujet {
+  font-weight: 500;
+}
+
+.liste-emails .email .expediteur {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.liste-emails .email .corps-email {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text);
+  white-space: pre-wrap;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.zone-reponse {
+  margin-top: 8px;
+}
+
+.btn-repondre,
+.btn-envoyer {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent-hover);
+  background-color: var(--accent-soft-bg);
+  border: 1px solid var(--accent-soft-border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.btn-repondre:hover,
+.btn-envoyer:hover {
+  background-color: var(--accent-soft-border);
+}
+
+.btn-envoyer:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.zone-brouillon {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.texte-brouillon {
+  width: 100%;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text);
+  background-color: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  resize: vertical;
+}
+
+.statut-envoi {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.statut-envoi.erreur {
+  color: var(--error);
+}
+
+.statut-envoi.succes {
+  color: var(--accent-hover);
+  font-weight: 600;
+}
+
+/* Mail jugé urgent par le tri IA : liseré + puce rouge devant le sujet */
+.liste-emails .email.urgent {
+  border-color: var(--error);
+}
+
+.liste-emails .email.urgent .sujet::before {
+  content: "● ";
+  color: var(--error);
+}
+
+.liste-emails .vide,
+.liste-emails .erreur {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 8px;
+}
+
+.liste-emails .erreur {
+  color: var(--error);
+}
+
+/* Zone Suggestions / briefing du matin : cliquable, généré à la demande */
+.zone-suggestion {
+  cursor: pointer;
+  min-height: 0;
+}
+
+.zone-suggestion.ouvert {
+  flex-direction: column;
+  align-items: stretch;
+  padding: 10px;
+}
+
+.panneau-suggestion {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.texte-briefing {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  font-family: var(--font-serif);
+  font-size: 15px;
+  color: var(--text);
+}
+
+/* Réutilise la mise en forme Markdown déjà définie pour .messages-chat .message */
+.texte-briefing p { margin: 0 0 8px; }
+.texte-briefing p:last-child { margin-bottom: 0; }
+.texte-briefing h1, .texte-briefing h2, .texte-briefing h3 {
+  font-weight: 600;
+  font-size: 1.1em;
+  margin: 10px 0 6px;
+}
+.texte-briefing h1:first-child, .texte-briefing h2:first-child, .texte-briefing h3:first-child {
+  margin-top: 0;
+}
+.texte-briefing ul, .texte-briefing ol { margin: 0 0 8px 18px; }
+.texte-briefing li { margin-bottom: 2px; }
+.texte-briefing strong { font-weight: 600; color: var(--accent-hover); }
+.texte-briefing table { border-collapse: collapse; margin: 0 0 8px; font-size: 0.9em; }
+.texte-briefing th, .texte-briefing td { border: 1px solid var(--accent-soft-border); padding: 3px 8px; }
+
+.liste-deadlines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.liste-deadlines .deadline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background-color: var(--surface);
+  border: 1px solid var(--accent-soft-border);
+  border-radius: var(--rayon-petit);
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.liste-deadlines .deadline-info {
+  color: var(--text);
+}
+
+.btn-ajouter-deadline {
+  flex-shrink: 0;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent-hover);
+  background-color: var(--accent-soft-bg);
+  border: 1px solid var(--accent-soft-border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.btn-ajouter-deadline:hover {
+  background-color: var(--accent-soft-border);
+}
+
+.btn-ajouter-deadline:disabled {
+  opacity: 0.7;
+  cursor: default;
 }
 
 /* Zone chat : cliquable pour ouvrir/fermer le panneau de saisie */
@@ -313,26 +654,26 @@ body {
   min-height: 0;
   overflow-y: auto;
   font-family: var(--font-serif);
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .messages-chat .message {
   background-color: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--rayon-petit);
   padding: 6px 10px;
   max-width: 80%;
 }
 
 .messages-chat .message.utilisateur {
   align-self: flex-end;
-  background-color: var(--accent-soft-bg);
-  border-color: var(--accent-soft-border);
-  color: var(--accent-hover);
+  background-color: var(--zone-soft);
+  border-color: var(--zone-border);
+  color: var(--zone-core);
 }
 
 .messages-chat .message.erreur {
@@ -353,7 +694,7 @@ body {
 .messages-chat .message h2,
 .messages-chat .message h3 {
   font-weight: 600;
-  font-size: 1.05em;
+  font-size: 1.1em;
   margin: 10px 0 6px;
 }
 
@@ -374,12 +715,12 @@ body {
 
 .messages-chat .message strong {
   font-weight: 600;
-  color: var(--accent-hover);
+  color: var(--zone-core);
 }
 
 .messages-chat .message code {
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
-  background-color: var(--accent-soft-bg);
+  background-color: var(--zone-soft);
   padding: 1px 4px;
   border-radius: 4px;
   font-size: 0.85em;
@@ -388,7 +729,7 @@ body {
 .messages-chat .message pre {
   background-color: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--rayon-petit);
   padding: 8px;
   overflow-x: auto;
   margin: 0 0 8px;
@@ -401,16 +742,18 @@ body {
 
 #form-chat input {
   width: 100%;
-  border: 1px solid var(--accent-soft-border);
-  border-radius: 8px;
-  padding: 8px 10px;
+  border: 1px solid var(--zone-border);
+  border-radius: var(--rayon-petit);
+  padding: 9px 12px;
   font-family: var(--font-sans);
   font-size: 13px;
   color: var(--text);
   background-color: var(--surface);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 #form-chat input:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--zone-core);
+  box-shadow: 0 0 0 3px var(--zone-soft);
 }

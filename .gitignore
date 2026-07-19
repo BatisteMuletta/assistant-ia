@@ -16,3 +16,5 @@ costs.json
 chat_history.json
 activity_log.json
 stats.json
+mails_notifies.json
+config.json

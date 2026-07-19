@@ -24,7 +24,8 @@ sur Ubuntu Linux, en apprenant en profondeur les briques techniques utilisées (
 
 ## État d'avancement
 
-🟡 Étape 0 — Mise en place du repo Git
+✅ Étapes 0 à 3 terminées (repo Git, squelette dashboard, chat Claude, Gmail/Calendar/notifications)
+🟡 Étape 4 — Briefing matin adaptatif + détection deadlines
 
 ## Contraintes clés
 

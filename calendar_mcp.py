@@ -7,6 +7,7 @@
 # serveur est synchrone, chaque appel est exécuté via asyncio.run().
 
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 
 from mcp import ClientSession
@@ -44,6 +45,52 @@ def lister_evenements_semaine() -> str:
             _appeler_outil(
                 "list-events",
                 {"calendarId": "primary", "timeMin": debut, "timeMax": fin},
+            )
+        )
+    except Exception as erreur:
+        raise ServeurCalendarIndisponibleError(
+            f"Serveur MCP Calendar injoignable sur {URL_SERVEUR_MCP} : {erreur}"
+        ) from erreur
+
+
+def _bornes_jour_courant() -> tuple[str, str]:
+    """Aujourd'hui 00h00 -> demain 00h00, au format attendu par l'API Google Calendar."""
+    aujourdhui = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    demain = aujourdhui + timedelta(days=1)
+    return aujourdhui.isoformat(), demain.isoformat()
+
+
+def lister_evenements_jour() -> list[dict]:
+    """Retourne les événements du jour même, déjà parsés (liste de dicts)."""
+    debut, fin = _bornes_jour_courant()
+    try:
+        texte = asyncio.run(
+            _appeler_outil(
+                "list-events",
+                {"calendarId": "primary", "timeMin": debut, "timeMax": fin},
+            )
+        )
+    except Exception as erreur:
+        raise ServeurCalendarIndisponibleError(
+            f"Serveur MCP Calendar injoignable sur {URL_SERVEUR_MCP} : {erreur}"
+        ) from erreur
+    return json.loads(texte).get("events", [])
+
+
+def ajouter_evenement(summary: str, start: str, end: str, description: str = "") -> None:
+    """Crée un événement dans le calendrier principal. À n'appeler qu'après confirmation
+    explicite de l'utilisateur — voir la route /api/briefing/deadline dans server.py."""
+    try:
+        asyncio.run(
+            _appeler_outil(
+                "create-event",
+                {
+                    "calendarId": "primary",
+                    "summary": summary,
+                    "start": start,
+                    "end": end,
+                    "description": description,
+                },
             )
         )
     except Exception as erreur:
