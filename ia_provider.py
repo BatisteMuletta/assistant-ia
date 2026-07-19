@@ -142,6 +142,42 @@ def rediger_reponse_email(email):
     return generer_reponse([{"role": "user", "content": prompt}])
 
 
+def analyser_note(texte: str) -> dict:
+    """Analyse une note rapide : détecte si elle décrit une action à faire (suggestion
+    de tâche, jamais créée automatiquement — voir /api/taches/confirmer), détecte la
+    langue et traduit si besoin, et prépare une version nettoyée pour notes.md.
+    En cas d'échec de l'appel IA, la note est quand même conservée telle quelle
+    (dégradation silencieuse : pas de tâche suggérée, pas de traduction, texte brut)."""
+    prompt = (
+        "Analyse cette note rapide prise par l'utilisateur. Réponds UNIQUEMENT avec un "
+        "JSON de la forme "
+        '{"tache_suggeree": "..." ou null, "urgent": true/false, "langue": "fr"/"en"/..., '
+        '"traduction": "..." ou null, "note_nettoyee": "..."}, sans aucun texte autour.\n'
+        "- tache_suggeree : si la note décrit une action à faire, un texte de tâche court "
+        "et actionnable ; sinon null.\n"
+        "- urgent : uniquement pertinent si tache_suggeree n'est pas null.\n"
+        "- langue : code à 2 lettres de la langue de la note.\n"
+        "- traduction : traduction française si la langue n'est pas le français, sinon null.\n"
+        "- note_nettoyee : la note reformulée brièvement, sans changer le sens, prête à "
+        "être archivée telle quelle.\n\n"
+        f"Note : {texte}"
+    )
+    resultat = {
+        "tache_suggeree": None,
+        "urgent": False,
+        "langue": "fr",
+        "traduction": None,
+        "note_nettoyee": texte,
+    }
+    try:
+        reponse = generer_reponse([{"role": "user", "content": prompt}])
+        debut, fin = reponse.index("{"), reponse.rindex("}") + 1
+        resultat.update(json.loads(reponse[debut:fin]))
+    except Exception:
+        pass
+    return resultat
+
+
 def detecter_deadlines(mails: list[dict]) -> list[dict]:
     """Analyse le corps de mails (avec leur contenu complet, champ "corps") pour repérer des
     deadlines explicites ou implicites (date limite, réunion déplacée, rendu attendu...).
@@ -171,14 +207,26 @@ def detecter_deadlines(mails: list[dict]) -> list[dict]:
         return []
 
 
-def generer_briefing(mails_urgents: list[dict], evenements_jour: list[dict], deadlines: list[dict]) -> str:
-    """Chaînage : combine mails urgents + événements du jour + deadlines détectées en un seul
-    texte de briefing, dont la longueur s'adapte au niveau d'urgence (calme -> synthèse courte,
-    urgences détectées -> briefing détaillé), conformément au cahier des charges."""
-    rien_d_urgent = not mails_urgents and not deadlines
+def generer_briefing(
+    mails_urgents: list[dict],
+    evenements_jour: list[dict],
+    deadlines: list[dict],
+    taches_non_faites: list[dict] | None = None,
+) -> str:
+    """Chaînage : combine mails urgents + événements du jour + deadlines détectées +
+    tâches non faites en un seul texte de briefing, dont la longueur s'adapte au niveau
+    d'urgence (calme -> synthèse courte, urgences détectées -> briefing détaillé),
+    conformément au cahier des charges."""
+    taches_non_faites = taches_non_faites or []
+    taches_urgentes = [t for t in taches_non_faites if t["urgent"]]
+    rien_d_urgent = not mails_urgents and not deadlines and not taches_urgentes
+
     resume_mails = "\n".join(f"- {m['sujet']} (de {m['expediteur']})" for m in mails_urgents) or "Aucun"
     resume_evenements = "\n".join(f"- {e.get('summary') or '(sans titre)'}" for e in evenements_jour) or "Aucun"
     resume_deadlines = "\n".join(f"- {d.get('titre')} ({d.get('date')})" for d in deadlines) or "Aucune"
+    resume_taches = "\n".join(
+        f"- {t['texte']}" + (" (urgent)" if t["urgent"] else "") for t in taches_non_faites
+    ) or "Aucune"
 
     consigne_longueur = (
         "Rien d'urgent aujourd'hui : rédige une synthèse courte, 3 à 4 lignes maximum."
@@ -192,6 +240,7 @@ def generer_briefing(mails_urgents: list[dict], evenements_jour: list[dict], dea
         f"{consigne_longueur}\n\n"
         f"Mails urgents :\n{resume_mails}\n\n"
         f"Événements du jour :\n{resume_evenements}\n\n"
-        f"Deadlines détectées dans les mails :\n{resume_deadlines}"
+        f"Deadlines détectées dans les mails :\n{resume_deadlines}\n\n"
+        f"Tâches non faites :\n{resume_taches}"
     )
     return generer_reponse([{"role": "user", "content": prompt}])

@@ -135,26 +135,6 @@ def lire_email(message_id: str) -> dict:
     return _parser_email_complet(texte_brut)
 
 
-def extraire_adresse(expediteur: str) -> str:
-    """Extrait l'adresse mail d'un en-tête du type 'Nom <adresse@exemple.com>'."""
-    correspondance = re.search(r"<([^<>]+)>", expediteur)
-    return correspondance.group(1) if correspondance else expediteur.strip()
-
-
-def envoyer_email(destinataire: str, sujet: str, corps: str, thread_id: str = "") -> None:
-    """Envoie un email (réponse ou nouveau message). thread_id, si fourni, garde le
-    message dans le même fil de discussion Gmail que l'email d'origine."""
-    arguments = {"to": [destinataire], "subject": sujet, "body": corps}
-    if thread_id:
-        arguments["threadId"] = thread_id
-    try:
-        asyncio.run(_appeler_outil("send_email", arguments))
-    except Exception as erreur:
-        raise ServeurGmailIndisponibleError(
-            f"Serveur MCP Gmail injoignable ({CHEMIN_SERVEUR_MCP}) : {erreur}"
-        ) from erreur
-
-
 def lister_emails_recents(nombre: int = 10) -> list[dict]:
     """Retourne les derniers emails de la boîte de réception, structurés (id/sujet/expediteur/date)."""
     try:

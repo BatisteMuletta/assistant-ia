@@ -18,3 +18,5 @@ activity_log.json
 stats.json
 mails_notifies.json
 config.json
+tasks.json
+notes.md

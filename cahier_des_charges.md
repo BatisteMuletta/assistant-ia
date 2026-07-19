@@ -169,7 +169,7 @@ Une page web qui s'ouvre comme page d'accueil de Chrome (onglet pinné, toujours
 ### Système de validation selon le type d'action
 | Action | Mode de validation |
 |---|---|
-| Envoi de mail | Bouton "Envoyer" explicite dans le dashboard |
+| Réponse à un mail | **Aucun envoi depuis le dashboard** — Claude génère un brouillon, l'utilisateur le copie et le colle lui-même dans Gmail (voir section "Fonctionnalités Gmail") |
 | Rangement fichier | Confirmation simple dans le chat |
 | Ajout événement calendrier | Bouton "Confirmer" dans la section suggestions |
 | Note → tâche | Suggestion automatique avec bouton confirmer/ignorer |
@@ -185,9 +185,17 @@ Adaptatif selon l'urgence détectée :
 - Un seul compte Gmail (perso + études mélangés)
 - Tri automatique urgent / pas urgent
 - Recherche en langage naturel via Claude ("trouve le mail de mon prof sur le projet")
-- Rédaction de réponses par Claude, validation + bouton envoi obligatoire
 - Ton adapté au destinataire (formel école/pro, décontracté perso)
 - Détection automatique des deadlines dans les mails → suggestion ajout calendrier
+
+**⚠️ RÈGLE CRITIQUE — Aucun envoi de mail depuis le dashboard (décidé le 19/07/2026, jamais négociable) :**
+Le dashboard ne peut PAS envoyer de mail, à aucun niveau :
+1. Claude génère un brouillon de réponse (texte éditable), rien de plus
+2. Un lien "Ouvrir dans Gmail" ouvre le vrai fil de discussion dans Gmail (nouvel onglet) — l'utilisateur clique lui-même sur "Répondre" côté Gmail (fil/sujet gérés nativement par Gmail, garantie que c'est une réponse vierge)
+3. L'utilisateur copie le brouillon et le colle lui-même dans Gmail, puis envoie depuis Gmail — jamais depuis le dashboard
+- **Aucune route serveur capable d'envoyer** (`server.py` n'expose pas de endpoint d'envoi)
+- **Jeton OAuth Gmail en scope lecture seule** (`gmail.readonly`, via `--scopes` du serveur MCP Gmail) : l'outil `send_email` n'existe même plus côté serveur MCP, donc aucun bug de code ne pourrait déclencher un envoi — la garantie est au niveau du jeton, pas seulement de l'interface
+- Le calendrier n'est pas concerné par cette règle : l'ajout d'événements depuis le dashboard reste autorisé (moins critique qu'un mail envoyé au nom de l'utilisateur)
 
 ### Fonctionnalités Calendrier
 - Vue semaine complète
@@ -381,7 +389,7 @@ Schéma de chaque étape :
 - **Test obligatoire** avant validation de chaque étape
 - **Cross-platform dès le départ** — migration Ubuntu → Windows en moins de 30 min
 - **Confidentialité stricte** — aucune lecture de fichier sans permission explicite
-- **Validation avant envoi mail** — toujours, sans exception
+- **Aucun envoi de mail depuis le dashboard** — brouillon + lien Gmail + copier-coller manuel uniquement, jamais de bouton d'envoi ni de route serveur capable d'envoyer (voir Projet 1, section Gmail)
 - **Code commenté en français** — lisible et modifiable par l'utilisateur dans VS Code
 - **Construction progressive et pédagogique** — tout comprendre avant d'avancer
 - **Tout via Claude Code** — approche développeur, pas de no-code
@@ -394,3 +402,4 @@ Schéma de chaque étape :
 *Cahier des charges v4 — 04/07/2026 — document vivant, mis à jour à chaque étape*
 *Changements v3 → v4 : analogies embarqué plus légères/subtiles, parenthèses explicatives systématiques pour le jargon, explication proactive des nouveaux termes techniques, quiz de compréhension en QCM interactif plutôt qu'en question ouverte, clarification de la limite d'accès fichier du chat vs Claude Code.*
 *Changements v4 → v4.1 (13/07/2026) : profil utilisateur précisé (INSA Toulouse, alternance Catamania à Issy-les-Moulineaux à partir de septembre 2026).*
+*Changements v4.1 → v4.2 (19/07/2026) : suppression totale de la capacité d'envoi de mail depuis le dashboard (plus de bouton "Envoyer" ni de route serveur d'envoi, jeton OAuth Gmail repassé en scope lecture seule) — remplacée par brouillon généré + lien "Ouvrir dans Gmail" + copier-coller manuel par l'utilisateur.*

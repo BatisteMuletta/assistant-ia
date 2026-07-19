@@ -14,20 +14,21 @@ from calendar_mcp import ServeurCalendarIndisponibleError, lister_evenements_sem
 from costs import etat_couts
 from gmail_mcp import (
     ServeurGmailIndisponibleError,
-    envoyer_email,
-    extraire_adresse,
     lire_email,
     lister_emails_recents,
 )
 from ia_provider import (
     CleManquanteError,
     CoutBloqueError,
+    analyser_note,
     ecrire_provider,
     generer_reponse,
     lire_provider,
     rediger_reponse_email,
     trier_emails_urgents,
 )
+from notes import ajouter_note
+from taches import ajouter_tache, lister_taches, toggle_tache
 
 BASE_DIR = Path(__file__).parent
 
@@ -36,7 +37,9 @@ app = Flask(__name__)
 # Protection CSRF : les routes qui mutent des données ou coûtent de l'argent (API payante)
 # n'acceptent que les requêtes venant de notre propre dashboard. Sans ça, n'importe quel
 # appel HTTP direct (page web tierce, script, curl...) déclenche l'action sans validation
-# humaine réelle — le bouton "Envoyer" côté UI n'est qu'une convention, pas un verrou serveur.
+# humaine réelle — un bouton "Confirmer" côté UI n'est qu'une convention, pas un verrou serveur.
+# Note : l'envoi de mail n'a de toute façon plus de route ici (voir gmail_mcp.py) — le
+# jeton OAuth Gmail est en scope lecture seule, send_email n'existe même plus côté serveur MCP.
 ORIGINES_AUTORISEES = {"http://127.0.0.1:5000", "http://localhost:5000"}
 
 
@@ -164,26 +167,6 @@ def gmail_draft(message_id):
     return jsonify({"brouillon": brouillon})
 
 
-@app.route("/api/gmail/<message_id>/send", methods=["POST"])
-def gmail_send(message_id):
-    """Envoi réel : appelé uniquement depuis le clic explicite du bouton "Envoyer"
-    du dashboard, jamais automatiquement. Le corps envoyé est celui validé/édité
-    par l'utilisateur, pas nécessairement le brouillon généré par l'IA."""
-    if not _origine_locale():
-        return _origine_refusee()
-    corps = ((request.json or {}).get("corps") or "").strip()
-    if not corps:
-        return jsonify({"erreur": "Le corps de la réponse est vide."}), 400
-    try:
-        email = lire_email(message_id)
-        destinataire = extraire_adresse(email["expediteur"])
-        sujet = email["sujet"] if email["sujet"].lower().startswith("re:") else f"Re: {email['sujet']}"
-        envoyer_email(destinataire, sujet, corps, thread_id=email.get("thread_id", ""))
-    except ServeurGmailIndisponibleError as erreur:
-        return jsonify({"erreur": str(erreur)}), 503
-    return jsonify({"envoye": True})
-
-
 @app.route("/api/briefing", methods=["POST"])
 def briefing():
     """Génère le briefing du matin à la demande (mails urgents + événements du jour +
@@ -216,6 +199,56 @@ def briefing_deadline():
     except ServeurCalendarIndisponibleError as erreur:
         return jsonify({"erreur": str(erreur)}), 503
     return jsonify({"ajoute": True})
+
+
+@app.route("/api/notes", methods=["POST"])
+def notes():
+    """Analyse une note (tâche potentielle ? langue ? version nettoyée), puis l'archive
+    automatiquement dans notes.md. La tâche suggérée, elle, n'est PAS créée ici : elle
+    est seulement renvoyée pour affichage, la création réelle attend la confirmation
+    explicite côté dashboard (voir /api/taches/confirmer)."""
+    if not _origine_locale():
+        return _origine_refusee()
+    texte = ((request.json or {}).get("texte") or "").strip()
+    if not texte:
+        return jsonify({"erreur": "Note vide."}), 400
+    try:
+        analyse = analyser_note(texte)
+    except CoutBloqueError as erreur:
+        return jsonify({"erreur": str(erreur), "anomalie": True}), 402
+    except CleManquanteError as erreur:
+        return jsonify({"erreur": str(erreur), "anomalie": False}), 400
+    ajouter_note(analyse["note_nettoyee"])
+    return jsonify(analyse)
+
+
+@app.route("/api/taches", methods=["GET"])
+def taches():
+    return jsonify(lister_taches())
+
+
+@app.route("/api/taches/confirmer", methods=["POST"])
+def taches_confirmer():
+    """Crée réellement une tâche suggérée — appelée uniquement sur clic explicite du
+    bouton "Confirmer" à côté de la suggestion, jamais automatiquement depuis /api/notes."""
+    if not _origine_locale():
+        return _origine_refusee()
+    donnees = request.json or {}
+    texte = (donnees.get("texte") or "").strip()
+    urgent = bool(donnees.get("urgent"))
+    if not texte:
+        return jsonify({"erreur": "Texte de tâche manquant."}), 400
+    return jsonify(ajouter_tache(texte, urgent=urgent))
+
+
+@app.route("/api/taches/<tache_id>/toggle", methods=["POST"])
+def taches_toggle(tache_id):
+    if not _origine_locale():
+        return _origine_refusee()
+    tache = toggle_tache(tache_id)
+    if tache is None:
+        return jsonify({"erreur": "Tâche introuvable."}), 404
+    return jsonify(tache)
 
 
 if __name__ == "__main__":

@@ -19,22 +19,29 @@
   <!-- Grille principale du dashboard : 9 zones, voir layout_dashboard_etape1.md -->
   <main class="dashboard">
 
-    <!-- Bloc notes rapide -->
-    <section class="zone zone-notes" title="Notes / Notes">
+    <!-- Bloc notes rapide : icône seule tant que fermé, saisie au clic -->
+    <section id="zone-notes" class="zone zone-notes" title="Notes / Notes (clic pour écrire)">
       <span class="icone-chip">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg id="icone-notes" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M5 5a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2l0 -14" />
           <path d="M9 7l6 0" />
           <path d="M9 11l6 0" />
           <path d="M9 15l4 0" />
         </svg>
       </span>
+      <div id="panneau-notes" class="panneau-notes" hidden>
+        <form id="form-note">
+          <textarea id="saisie-note" placeholder="Écris une note, Entrée pour l'analyser…" rows="3"></textarea>
+        </form>
+        <div id="suggestion-tache" class="suggestion-tache" hidden></div>
+        <div id="statut-note" class="statut-note"></div>
+      </div>
     </section>
 
-    <!-- Tâches urgent / pas urgent -->
-    <section class="zone zone-taches" title="Tâches / Tasks">
+    <!-- Tâches urgent / pas urgent : icône seule tant que fermé, liste au clic -->
+    <section id="zone-taches" class="zone zone-taches" title="Tâches / Tasks (clic pour la liste)">
       <span class="icone-chip">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg id="icone-taches" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3.5 5.5l1.5 1.5l2.5 -2.5" />
           <path d="M3.5 11.5l1.5 1.5l2.5 -2.5" />
           <path d="M3.5 17.5l1.5 1.5l2.5 -2.5" />
@@ -43,6 +50,9 @@
           <path d="M11 18l9 0" />
         </svg>
       </span>
+      <div id="panneau-taches" class="panneau-taches" hidden>
+        <div id="liste-taches" class="liste-taches"></div>
+      </div>
     </section>
 
     <!-- Mails triés urgent / pas urgent : icône seule tant que fermé, liste au clic -->

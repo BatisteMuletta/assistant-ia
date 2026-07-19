@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from calendar_mcp import ServeurCalendarIndisponibleError, ajouter_evenement, lister_evenements_jour
 from gmail_mcp import ServeurGmailIndisponibleError, lire_email, lister_emails_recents
 from ia_provider import detecter_deadlines, generer_briefing, trier_emails_urgents
+from taches import lister_taches_non_faites
 
 NOMBRE_CANDIDATS_GMAIL = 25
 
@@ -43,13 +44,15 @@ def construire_briefing() -> dict:
         mails_avec_corps[-1]["id"] = mail["id"]
 
     deadlines = detecter_deadlines(mails_avec_corps)
-    texte = generer_briefing(mails_urgents, evenements_jour, deadlines)
+    taches_non_faites = lister_taches_non_faites()
+    texte = generer_briefing(mails_urgents, evenements_jour, deadlines, taches_non_faites)
 
     return {
         "texte": texte,
         "mails_urgents": mails_urgents,
         "evenements_jour": evenements_jour,
         "deadlines": deadlines,
+        "taches_non_faites": taches_non_faites,
     }
 
 

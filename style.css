@@ -383,6 +383,155 @@ body {
   color: var(--error);
 }
 
+/* Zone Notes : cliquable pour ouvrir/fermer la saisie rapide */
+.zone-notes {
+  cursor: pointer;
+  min-height: 0;
+}
+
+.zone-notes.ouvert {
+  flex-direction: column;
+  align-items: stretch;
+  padding: 10px;
+}
+
+.panneau-notes {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#form-note {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+#saisie-note {
+  width: 100%;
+  height: 100%;
+  resize: none;
+  font-family: var(--font-serif);
+  font-size: 13px;
+  color: var(--text);
+  background-color: var(--surface);
+  border: 1px solid var(--zone-border, var(--border));
+  border-radius: var(--rayon-petit);
+  padding: 8px 10px;
+}
+
+#saisie-note:focus {
+  outline: none;
+  border-color: var(--zone-core, var(--accent));
+}
+
+.suggestion-tache {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+  background-color: var(--zone-soft, var(--accent-soft-bg));
+  border: 1px solid var(--zone-border, var(--accent-soft-border));
+  border-radius: var(--rayon-petit);
+  padding: 6px 8px;
+}
+
+.suggestion-tache button {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+  border: 1px solid var(--zone-border, var(--accent-soft-border));
+  background-color: var(--surface);
+  color: var(--zone-core, var(--accent-hover));
+}
+
+.suggestion-tache button:hover {
+  background-color: var(--zone-soft, var(--accent-soft-bg));
+}
+
+.statut-note {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-height: 14px;
+}
+
+.statut-note.erreur {
+  color: var(--error);
+}
+
+/* Zone Tâches : cliquable pour ouvrir/fermer la liste */
+.zone-taches {
+  cursor: pointer;
+  min-height: 0;
+}
+
+.zone-taches.ouvert {
+  flex-direction: column;
+  align-items: stretch;
+  padding: 10px;
+}
+
+.panneau-taches {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.liste-taches {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.liste-taches .vide,
+.liste-taches .erreur {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 8px;
+}
+
+.liste-taches .erreur {
+  color: var(--error);
+}
+
+.tache {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--surface);
+  border: 1px solid var(--zone-border, var(--border));
+  border-radius: var(--rayon-petit);
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.tache.urgent {
+  border-color: var(--error);
+}
+
+.tache input[type="checkbox"] {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.tache.fait span {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
 /* Zone Gmail : cliquable pour ouvrir/fermer la liste des derniers mails */
 .zone-gmail {
   cursor: pointer;
@@ -452,8 +601,7 @@ body {
   margin-top: 8px;
 }
 
-.btn-repondre,
-.btn-envoyer {
+.btn-repondre {
   font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 500;
@@ -466,14 +614,8 @@ body {
   transition: background-color 0.15s ease;
 }
 
-.btn-repondre:hover,
-.btn-envoyer:hover {
+.btn-repondre:hover {
   background-color: var(--accent-soft-border);
-}
-
-.btn-envoyer:disabled {
-  opacity: 0.6;
-  cursor: default;
 }
 
 .zone-brouillon {
@@ -494,17 +636,55 @@ body {
   resize: vertical;
 }
 
-.statut-envoi {
+/* Le dashboard ne propose jamais d'envoi : juste copier le brouillon et ouvrir le
+   vrai fil Gmail, où l'utilisateur colle lui-même le texte dans sa propre réponse. */
+.actions-brouillon {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-copier,
+.btn-ouvrir-gmail {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.btn-copier {
+  color: var(--text-muted);
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.btn-copier:hover {
+  background-color: var(--bg);
+}
+
+.btn-ouvrir-gmail {
+  color: var(--zone-core);
+  background-color: var(--zone-soft);
+  border: 1px solid var(--zone-border);
+}
+
+.btn-ouvrir-gmail:hover {
+  background-color: var(--zone-border);
+}
+
+.statut-reponse {
   font-size: 11px;
   color: var(--text-muted);
 }
 
-.statut-envoi.erreur {
+.statut-reponse.erreur {
   color: var(--error);
 }
 
-.statut-envoi.succes {
-  color: var(--accent-hover);
+.statut-reponse.succes {
+  color: var(--zone-core);
   font-weight: 600;
 }
 

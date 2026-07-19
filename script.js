@@ -373,14 +373,19 @@ async function ouvrirFermerEmail(email, conteneurCorps, zoneReponse) {
     }
     conteneurCorps.textContent = donnees.corps || "(Corps vide)";
     conteneurCorps.dataset.charge = "1";
+    // Utilisé par le lien "Ouvrir dans Gmail" du bloc réponse : le thread_id n'est
+    // renvoyé que par le détail d'un mail, pas par la liste initiale.
+    email.thread_id = donnees.thread_id || "";
   } catch {
     conteneurCorps.textContent = "Impossible de joindre le serveur local.";
   }
 }
 
-// Construit le bloc "Répondre" d'un mail : brouillon généré par l'IA (Ollama/Claude
-// selon le provider actif), toujours éditable, jamais envoyé sans clic explicite sur
-// "Envoyer" (règle du cahier des charges : validation + bouton d'envoi obligatoire).
+// Construit le bloc "brouillon" d'un mail : le dashboard ne peut PAS envoyer de mail
+// (aucune route d'envoi côté serveur, et le jeton OAuth Gmail est en lecture seule —
+// voir gmail_mcp.py). Claude ne fait que proposer un texte de réponse, éditable ; c'est
+// l'utilisateur qui le copie et le colle lui-même dans Gmail, après avoir cliqué sur
+// "Répondre" dans le fil ouvert via le lien ci-dessous.
 function creerZoneReponse(email) {
   const zone = document.createElement("div");
   zone.className = "zone-reponse";
@@ -389,10 +394,10 @@ function creerZoneReponse(email) {
   // remonter jusqu'au bloc email et de refermer le mail (comme pour les autres panneaux)
   zone.addEventListener("click", (evenement) => evenement.stopPropagation());
 
-  const btnRepondre = document.createElement("button");
-  btnRepondre.type = "button";
-  btnRepondre.className = "btn-repondre";
-  btnRepondre.textContent = "Répondre";
+  const btnGenerer = document.createElement("button");
+  btnGenerer.type = "button";
+  btnGenerer.className = "btn-repondre";
+  btnGenerer.textContent = "Générer un brouillon";
 
   const zoneBrouillon = document.createElement("div");
   zoneBrouillon.className = "zone-brouillon";
@@ -402,22 +407,33 @@ function creerZoneReponse(email) {
   texteBrouillon.className = "texte-brouillon";
   texteBrouillon.rows = 6;
 
-  const btnEnvoyer = document.createElement("button");
-  btnEnvoyer.type = "button";
-  btnEnvoyer.className = "btn-envoyer";
-  btnEnvoyer.textContent = "Envoyer";
+  const actions = document.createElement("div");
+  actions.className = "actions-brouillon";
+
+  const btnCopier = document.createElement("button");
+  btnCopier.type = "button";
+  btnCopier.className = "btn-copier";
+  btnCopier.textContent = "Copier";
+
+  const lienGmail = document.createElement("button");
+  lienGmail.type = "button";
+  lienGmail.className = "btn-ouvrir-gmail";
+  lienGmail.textContent = "Ouvrir dans Gmail ↗";
+  lienGmail.title = "Ouvre ce fil dans Gmail — clique sur \"Répondre\" là-bas, puis colle le brouillon";
 
   const statut = document.createElement("div");
-  statut.className = "statut-envoi";
+  statut.className = "statut-reponse";
 
+  actions.appendChild(btnCopier);
+  actions.appendChild(lienGmail);
   zoneBrouillon.appendChild(texteBrouillon);
-  zoneBrouillon.appendChild(btnEnvoyer);
+  zoneBrouillon.appendChild(actions);
   zoneBrouillon.appendChild(statut);
-  zone.appendChild(btnRepondre);
+  zone.appendChild(btnGenerer);
   zone.appendChild(zoneBrouillon);
 
-  btnRepondre.addEventListener("click", async () => {
-    btnRepondre.hidden = true;
+  btnGenerer.addEventListener("click", async () => {
+    btnGenerer.hidden = true;
     zoneBrouillon.hidden = false;
     texteBrouillon.disabled = true;
     texteBrouillon.value = "Génération du brouillon…";
@@ -428,8 +444,8 @@ function creerZoneReponse(email) {
       if (!reponse.ok) {
         texteBrouillon.value = "";
         statut.textContent = donnees.erreur || "Impossible de générer un brouillon.";
-        statut.className = "statut-envoi erreur";
-        btnRepondre.hidden = false;
+        statut.className = "statut-reponse erreur";
+        btnGenerer.hidden = false;
         zoneBrouillon.hidden = true;
         return;
       }
@@ -437,42 +453,30 @@ function creerZoneReponse(email) {
     } catch {
       texteBrouillon.value = "";
       statut.textContent = "Impossible de joindre le serveur local.";
-      statut.className = "statut-envoi erreur";
-      btnRepondre.hidden = false;
+      statut.className = "statut-reponse erreur";
+      btnGenerer.hidden = false;
       zoneBrouillon.hidden = true;
       return;
     }
     texteBrouillon.disabled = false;
   });
 
-  btnEnvoyer.addEventListener("click", async () => {
-    const corpsReponse = texteBrouillon.value.trim();
-    if (!corpsReponse) return;
-    btnEnvoyer.disabled = true;
-    statut.textContent = "Envoi…";
-    statut.className = "statut-envoi";
-
+  btnCopier.addEventListener("click", async () => {
     try {
-      const reponse = await fetch(`/api/gmail/${encodeURIComponent(email.id)}/send`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ corps: corpsReponse }),
-      });
-      const donnees = await reponse.json();
-      if (!reponse.ok) {
-        statut.textContent = donnees.erreur || "Échec de l'envoi.";
-        statut.className = "statut-envoi erreur";
-        btnEnvoyer.disabled = false;
-        return;
-      }
-      statut.textContent = "Envoyé.";
-      statut.className = "statut-envoi succes";
-      texteBrouillon.disabled = true;
+      await navigator.clipboard.writeText(texteBrouillon.value);
+      statut.textContent = "Brouillon copié ✓";
+      statut.className = "statut-reponse succes";
     } catch {
-      statut.textContent = "Impossible de joindre le serveur local.";
-      statut.className = "statut-envoi erreur";
-      btnEnvoyer.disabled = false;
+      statut.textContent = "Impossible de copier — sélectionne le texte manuellement.";
+      statut.className = "statut-reponse erreur";
     }
+  });
+
+  // Ouvre le fil directement dans Gmail (nouvel onglet) : c'est là que l'utilisateur
+  // clique lui-même sur "Répondre" et colle le brouillon — le dashboard n'envoie rien.
+  lienGmail.addEventListener("click", () => {
+    const cle = email.thread_id || email.id;
+    window.open(`https://mail.google.com/mail/u/0/#all/${encodeURIComponent(cle)}`, "_blank", "noopener");
   });
 
   return zone;
@@ -558,6 +562,189 @@ function creerLigneDeadline(deadline) {
 
   ligne.appendChild(info);
   ligne.appendChild(bouton);
+  return ligne;
+}
+
+// --- Notes (icône seule par défaut, saisie au clic) ---
+const zoneNotes = document.getElementById("zone-notes");
+const panneauNotes = document.getElementById("panneau-notes");
+const iconeNotes = document.getElementById("icone-notes");
+const formNote = document.getElementById("form-note");
+const saisieNote = document.getElementById("saisie-note");
+const suggestionTache = document.getElementById("suggestion-tache");
+const statutNote = document.getElementById("statut-note");
+
+zoneNotes.addEventListener("click", () => {
+  const estOuvert = zoneNotes.classList.toggle("ouvert");
+  panneauNotes.hidden = !estOuvert;
+  iconeNotes.hidden = estOuvert;
+  if (estOuvert) saisieNote.focus();
+});
+
+panneauNotes.addEventListener("click", (evenement) => evenement.stopPropagation());
+
+// Entrée envoie la note (Maj+Entrée garde le comportement normal : nouvelle ligne)
+saisieNote.addEventListener("keydown", (evenement) => {
+  if (evenement.key === "Enter" && !evenement.shiftKey) {
+    evenement.preventDefault();
+    formNote.requestSubmit();
+  }
+});
+
+formNote.addEventListener("submit", async (evenement) => {
+  evenement.preventDefault();
+  const texte = saisieNote.value.trim();
+  if (!texte) return;
+
+  saisieNote.disabled = true;
+  statutNote.textContent = "Analyse…";
+  statutNote.className = "statut-note";
+  suggestionTache.hidden = true;
+
+  try {
+    const reponse = await fetch("/api/notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ texte }),
+    });
+    const donnees = await reponse.json();
+    if (!reponse.ok) {
+      statutNote.textContent = donnees.erreur || "Impossible d'analyser cette note.";
+      statutNote.className = "statut-note erreur";
+      saisieNote.disabled = false;
+      return;
+    }
+
+    saisieNote.value = "";
+    statutNote.textContent = donnees.traduction
+      ? `Note enregistrée. Traduction : ${donnees.traduction}`
+      : "Note enregistrée.";
+
+    if (donnees.tache_suggeree) {
+      afficherSuggestionTache(donnees.tache_suggeree, donnees.urgent);
+    }
+  } catch {
+    statutNote.textContent = "Impossible de joindre le serveur local.";
+    statutNote.className = "statut-note erreur";
+  }
+  saisieNote.disabled = false;
+  saisieNote.focus();
+});
+
+function afficherSuggestionTache(texteTache, urgent) {
+  suggestionTache.textContent = "";
+  suggestionTache.hidden = false;
+
+  const texte = document.createElement("span");
+  texte.textContent = `Ajouter comme tâche : "${texteTache}" ?`;
+
+  const btnConfirmer = document.createElement("button");
+  btnConfirmer.type = "button";
+  btnConfirmer.textContent = "Confirmer";
+
+  const btnIgnorer = document.createElement("button");
+  btnIgnorer.type = "button";
+  btnIgnorer.textContent = "Ignorer";
+
+  btnConfirmer.addEventListener("click", async () => {
+    btnConfirmer.disabled = true;
+    btnIgnorer.disabled = true;
+    try {
+      const reponse = await fetch("/api/taches/confirmer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texte: texteTache, urgent }),
+      });
+      if (!reponse.ok) throw new Error();
+      suggestionTache.hidden = true;
+      statutNote.textContent = "Tâche ajoutée.";
+    } catch {
+      statutNote.textContent = "Impossible d'ajouter la tâche.";
+      statutNote.className = "statut-note erreur";
+      btnConfirmer.disabled = false;
+      btnIgnorer.disabled = false;
+    }
+  });
+
+  btnIgnorer.addEventListener("click", () => {
+    suggestionTache.hidden = true;
+  });
+
+  suggestionTache.appendChild(texte);
+  suggestionTache.appendChild(btnConfirmer);
+  suggestionTache.appendChild(btnIgnorer);
+}
+
+// --- Tâches (icône seule par défaut, liste au clic) ---
+const zoneTaches = document.getElementById("zone-taches");
+const panneauTaches = document.getElementById("panneau-taches");
+const iconeTaches = document.getElementById("icone-taches");
+const listeTaches = document.getElementById("liste-taches");
+
+zoneTaches.addEventListener("click", async () => {
+  const estOuvert = zoneTaches.classList.toggle("ouvert");
+  panneauTaches.hidden = !estOuvert;
+  iconeTaches.hidden = estOuvert;
+  if (estOuvert) await rafraichirTaches();
+});
+
+panneauTaches.addEventListener("click", (evenement) => evenement.stopPropagation());
+
+async function rafraichirTaches() {
+  listeTaches.textContent = "Chargement…";
+  try {
+    const reponse = await fetch("/api/taches");
+    const taches = await reponse.json();
+    listeTaches.textContent = "";
+
+    if (taches.length === 0) {
+      const vide = document.createElement("div");
+      vide.className = "vide";
+      vide.textContent = "Aucune tâche.";
+      listeTaches.appendChild(vide);
+      return;
+    }
+
+    // Urgentes d'abord, tri stable (ne mélange pas l'ordre au sein d'un même groupe)
+    const triees = [...taches].sort((a, b) => (b.urgent === true) - (a.urgent === true));
+    for (const tache of triees) {
+      listeTaches.appendChild(creerLigneTache(tache));
+    }
+  } catch {
+    listeTaches.textContent = "";
+    const erreur = document.createElement("div");
+    erreur.className = "erreur";
+    erreur.textContent = "Impossible de joindre le serveur local.";
+    listeTaches.appendChild(erreur);
+  }
+}
+
+function creerLigneTache(tache) {
+  const ligne = document.createElement("label");
+  ligne.className = "tache" + (tache.urgent ? " urgent" : "") + (tache.fait ? " fait" : "");
+
+  const case_ = document.createElement("input");
+  case_.type = "checkbox";
+  case_.checked = tache.fait;
+
+  const texte = document.createElement("span");
+  texte.textContent = tache.texte;
+
+  case_.addEventListener("change", async () => {
+    case_.disabled = true;
+    try {
+      const reponse = await fetch(`/api/taches/${encodeURIComponent(tache.id)}/toggle`, { method: "POST" });
+      if (!reponse.ok) throw new Error();
+      const misAJour = await reponse.json();
+      ligne.classList.toggle("fait", misAJour.fait);
+    } catch {
+      case_.checked = !case_.checked; // annule le changement visuel si l'appel a échoué
+    }
+    case_.disabled = false;
+  });
+
+  ligne.appendChild(case_);
+  ligne.appendChild(texte);
   return ligne;
 }
 
