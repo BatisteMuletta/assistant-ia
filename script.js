@@ -5,6 +5,12 @@
 const SVG_TOGGLE_LEFT = `<path d="M6 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" /><path d="M2 12a6 6 0 0 1 6 -6h8a6 6 0 0 1 6 6a6 6 0 0 1 -6 6h-8a6 6 0 0 1 -6 -6" />`;
 const SVG_TOGGLE_RIGHT = `<path d="M14 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" /><path d="M2 12a6 6 0 0 1 6 -6h8a6 6 0 0 1 6 6a6 6 0 0 1 -6 6h-8a6 6 0 0 1 -6 -6" />`;
 
+// Compte Gmail réellement connecté à ce dashboard (voir carnet d'apprentissage,
+// session 6/10) — ciblé explicitement par adresse dans le lien "Ouvrir dans Gmail" ;
+// sans ça, Gmail ouvre le compte en position 0 du navigateur, pas forcément le bon
+// si plusieurs comptes Google sont connectés en même temps.
+const COMPTE_GMAIL_DASHBOARD = "batistemuletta7@gmail.com";
+
 // --- Chat ---
 const zoneChat = document.getElementById("zone-chat");
 const panneauChat = document.getElementById("panneau-chat");
@@ -474,9 +480,13 @@ function creerZoneReponse(email) {
 
   // Ouvre le fil directement dans Gmail (nouvel onglet) : c'est là que l'utilisateur
   // clique lui-même sur "Répondre" et colle le brouillon — le dashboard n'envoie rien.
+  // authuser=<adresse> cible explicitement le bon compte, plutôt que /u/0/ qui dépend
+  // de l'ordre de connexion des comptes dans le navigateur (source du bug : ouvrait
+  // parfois un autre compte Google connecté en parallèle).
   lienGmail.addEventListener("click", () => {
     const cle = email.thread_id || email.id;
-    window.open(`https://mail.google.com/mail/u/0/#all/${encodeURIComponent(cle)}`, "_blank", "noopener");
+    const url = `https://mail.google.com/mail/?authuser=${encodeURIComponent(COMPTE_GMAIL_DASHBOARD)}#all/${encodeURIComponent(cle)}`;
+    window.open(url, "_blank", "noopener");
   });
 
   return zone;
@@ -565,78 +575,100 @@ function creerLigneDeadline(deadline) {
   return ligne;
 }
 
-// --- Notes (icône seule par défaut, saisie au clic) ---
+// --- Notes (icône seule par défaut, zone de texte unique au clic) ---
+// Une seule zone de texte libre, toujours entièrement visible et éditable comme un
+// fichier texte (une ligne = une note). Sauvegarde automatique en tâche de fond ;
+// aucun appel IA tant que l'utilisateur n'a pas cliqué explicitement sur "Analyser".
 const zoneNotes = document.getElementById("zone-notes");
 const panneauNotes = document.getElementById("panneau-notes");
 const iconeNotes = document.getElementById("icone-notes");
-const formNote = document.getElementById("form-note");
 const saisieNote = document.getElementById("saisie-note");
-const suggestionTache = document.getElementById("suggestion-tache");
+const suggestionsTaches = document.getElementById("suggestions-taches");
 const statutNote = document.getElementById("statut-note");
+const btnAnalyserNotes = document.getElementById("btn-analyser-notes");
 
-zoneNotes.addEventListener("click", () => {
+let notesChargees = false;
+let minuteurSauvegardeNote = null;
+
+zoneNotes.addEventListener("click", async () => {
   const estOuvert = zoneNotes.classList.toggle("ouvert");
   panneauNotes.hidden = !estOuvert;
   iconeNotes.hidden = estOuvert;
-  if (estOuvert) saisieNote.focus();
+  if (estOuvert) {
+    if (!notesChargees) await chargerNotes();
+    saisieNote.focus();
+  }
 });
 
 panneauNotes.addEventListener("click", (evenement) => evenement.stopPropagation());
 
-// Entrée envoie la note (Maj+Entrée garde le comportement normal : nouvelle ligne)
-saisieNote.addEventListener("keydown", (evenement) => {
-  if (evenement.key === "Enter" && !evenement.shiftKey) {
-    evenement.preventDefault();
-    formNote.requestSubmit();
+async function chargerNotes() {
+  try {
+    const reponse = await fetch("/api/notes");
+    const donnees = await reponse.json();
+    saisieNote.value = donnees.texte || "";
+    notesChargees = true;
+  } catch {
+    statutNote.textContent = "Impossible de joindre le serveur local.";
+    statutNote.className = "statut-note erreur";
   }
+}
+
+// Auto-save : un peu après la dernière frappe, pas à chaque caractère.
+saisieNote.addEventListener("input", () => {
+  clearTimeout(minuteurSauvegardeNote);
+  minuteurSauvegardeNote = setTimeout(sauvegarderNotes, 800);
 });
 
-formNote.addEventListener("submit", async (evenement) => {
-  evenement.preventDefault();
-  const texte = saisieNote.value.trim();
-  if (!texte) return;
+async function sauvegarderNotes() {
+  clearTimeout(minuteurSauvegardeNote);
+  try {
+    await fetch("/api/notes", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ texte: saisieNote.value }),
+    });
+  } catch {
+    statutNote.textContent = "Impossible de joindre le serveur local.";
+    statutNote.className = "statut-note erreur";
+  }
+}
 
-  saisieNote.disabled = true;
+btnAnalyserNotes.addEventListener("click", async () => {
+  btnAnalyserNotes.disabled = true;
   statutNote.textContent = "Analyse…";
   statutNote.className = "statut-note";
-  suggestionTache.hidden = true;
 
   try {
-    const reponse = await fetch("/api/notes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ texte }),
-    });
+    await sauvegarderNotes(); // s'assure d'analyser le texte le plus récent
+    const reponse = await fetch("/api/notes/analyser", { method: "POST" });
     const donnees = await reponse.json();
     if (!reponse.ok) {
-      statutNote.textContent = donnees.erreur || "Impossible d'analyser cette note.";
+      statutNote.textContent = donnees.erreur || "Impossible d'analyser les notes.";
       statutNote.className = "statut-note erreur";
-      saisieNote.disabled = false;
-      return;
-    }
-
-    saisieNote.value = "";
-    statutNote.textContent = donnees.traduction
-      ? `Note enregistrée. Traduction : ${donnees.traduction}`
-      : "Note enregistrée.";
-
-    if (donnees.tache_suggeree) {
-      afficherSuggestionTache(donnees.tache_suggeree, donnees.urgent);
+    } else if (donnees.suggestions.length === 0) {
+      statutNote.textContent = "Rien de nouveau à proposer.";
+    } else {
+      statutNote.textContent = "";
+      for (const suggestion of donnees.suggestions) {
+        afficherSuggestionTache(suggestion);
+      }
     }
   } catch {
     statutNote.textContent = "Impossible de joindre le serveur local.";
     statutNote.className = "statut-note erreur";
   }
-  saisieNote.disabled = false;
-  saisieNote.focus();
+  btnAnalyserNotes.disabled = false;
 });
 
-function afficherSuggestionTache(texteTache, urgent) {
-  suggestionTache.textContent = "";
-  suggestionTache.hidden = false;
+function afficherSuggestionTache(suggestion) {
+  suggestionsTaches.hidden = false;
+
+  const ligne = document.createElement("div");
+  ligne.className = "suggestion-tache";
 
   const texte = document.createElement("span");
-  texte.textContent = `Ajouter comme tâche : "${texteTache}" ?`;
+  texte.textContent = `Ajouter comme tâche : "${suggestion.tache_suggeree}" ?`;
 
   const btnConfirmer = document.createElement("button");
   btnConfirmer.type = "button";
@@ -653,11 +685,15 @@ function afficherSuggestionTache(texteTache, urgent) {
       const reponse = await fetch("/api/taches/confirmer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ texte: texteTache, urgent }),
+        body: JSON.stringify({
+          texte: suggestion.tache_suggeree,
+          urgent: suggestion.urgent,
+          note_id: suggestion.note_id,
+        }),
       });
       if (!reponse.ok) throw new Error();
-      suggestionTache.hidden = true;
-      statutNote.textContent = "Tâche ajoutée.";
+      ligne.remove();
+      if (!suggestionsTaches.children.length) suggestionsTaches.hidden = true;
     } catch {
       statutNote.textContent = "Impossible d'ajouter la tâche.";
       statutNote.className = "statut-note erreur";
@@ -666,13 +702,28 @@ function afficherSuggestionTache(texteTache, urgent) {
     }
   });
 
-  btnIgnorer.addEventListener("click", () => {
-    suggestionTache.hidden = true;
+  btnIgnorer.addEventListener("click", async () => {
+    btnConfirmer.disabled = true;
+    btnIgnorer.disabled = true;
+    try {
+      const reponse = await fetch(`/api/notes/${encodeURIComponent(suggestion.note_id)}/ignorer`, {
+        method: "POST",
+      });
+      if (!reponse.ok) throw new Error();
+      ligne.remove();
+      if (!suggestionsTaches.children.length) suggestionsTaches.hidden = true;
+    } catch {
+      statutNote.textContent = "Impossible d'ignorer cette suggestion.";
+      statutNote.className = "statut-note erreur";
+      btnConfirmer.disabled = false;
+      btnIgnorer.disabled = false;
+    }
   });
 
-  suggestionTache.appendChild(texte);
-  suggestionTache.appendChild(btnConfirmer);
-  suggestionTache.appendChild(btnIgnorer);
+  ligne.appendChild(texte);
+  ligne.appendChild(btnConfirmer);
+  ligne.appendChild(btnIgnorer);
+  suggestionsTaches.appendChild(ligne);
 }
 
 // --- Tâches (icône seule par défaut, liste au clic) ---
@@ -680,6 +731,9 @@ const zoneTaches = document.getElementById("zone-taches");
 const panneauTaches = document.getElementById("panneau-taches");
 const iconeTaches = document.getElementById("icone-taches");
 const listeTaches = document.getElementById("liste-taches");
+const formAjoutTache = document.getElementById("form-ajout-tache");
+const btnAjouterTache = document.getElementById("btn-ajouter-tache");
+const saisieTache = document.getElementById("saisie-tache");
 
 zoneTaches.addEventListener("click", async () => {
   const estOuvert = zoneTaches.classList.toggle("ouvert");
@@ -689,6 +743,53 @@ zoneTaches.addEventListener("click", async () => {
 });
 
 panneauTaches.addEventListener("click", (evenement) => evenement.stopPropagation());
+
+// Bouton "+" : ajout manuel d'une tâche, indépendant des suggestions venues des notes.
+btnAjouterTache.addEventListener("click", () => {
+  btnAjouterTache.hidden = true;
+  saisieTache.hidden = false;
+  saisieTache.focus();
+});
+
+function refermerAjoutTache() {
+  saisieTache.value = "";
+  saisieTache.hidden = true;
+  btnAjouterTache.hidden = false;
+}
+
+saisieTache.addEventListener("keydown", (evenement) => {
+  if (evenement.key === "Escape") refermerAjoutTache();
+});
+
+// Un clic hors du champ (sans avoir rien tapé) revient simplement au bouton "+"
+saisieTache.addEventListener("blur", () => {
+  if (!saisieTache.value.trim()) refermerAjoutTache();
+});
+
+formAjoutTache.addEventListener("submit", async (evenement) => {
+  evenement.preventDefault();
+  const texte = saisieTache.value.trim();
+  if (!texte) {
+    refermerAjoutTache();
+    return;
+  }
+  saisieTache.disabled = true;
+  try {
+    const reponse = await fetch("/api/taches/confirmer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ texte, urgent: false }),
+    });
+    if (!reponse.ok) throw new Error();
+    saisieTache.disabled = false;
+    refermerAjoutTache();
+    await rafraichirTaches();
+  } catch {
+    // On laisse le texte saisi pour réessayer, plutôt que de le perdre.
+    saisieTache.disabled = false;
+    saisieTache.focus();
+  }
+});
 
 async function rafraichirTaches() {
   listeTaches.textContent = "Chargement…";
@@ -747,5 +848,31 @@ function creerLigneTache(tache) {
   ligne.appendChild(texte);
   return ligne;
 }
+
+// --- Fermeture des panneaux en cliquant en dehors ---
+// Chat/calendrier/gmail/suggestion/notes/tâches partagent le même défaut : leur panneau
+// recouvre entièrement la zone une fois ouvert (pas de zone-couts, plus simple, pas concernée).
+// Or chacun stoppe la propagation du clic pour ne pas se refermer tout seul en cliquant
+// dedans (voir plus haut) — du coup il ne restait plus aucun pixel cliquable de la zone
+// elle-même pour la refermer. Un seul clic n'importe où ailleurs sur la page referme donc
+// maintenant le panneau ouvert, comme n'importe quelle appli.
+const ZONES_BASCULABLES = [
+  { zone: zoneChat, panneau: panneauChat, icone: iconeChat },
+  { zone: zoneCalendrier, panneau: panneauCalendrier, icone: iconeCalendrier },
+  { zone: zoneGmail, panneau: panneauGmail, icone: iconeGmail },
+  { zone: zoneSuggestion, panneau: panneauSuggestion, icone: iconeSuggestion },
+  { zone: zoneNotes, panneau: panneauNotes, icone: iconeNotes },
+  { zone: zoneTaches, panneau: panneauTaches, icone: iconeTaches },
+];
+
+document.addEventListener("click", (evenement) => {
+  for (const { zone, panneau, icone } of ZONES_BASCULABLES) {
+    if (zone.classList.contains("ouvert") && !zone.contains(evenement.target)) {
+      zone.classList.remove("ouvert");
+      panneau.hidden = true;
+      icone.hidden = false;
+    }
+  }
+});
 
 chargerProviderInitial();

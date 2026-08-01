@@ -30,11 +30,12 @@
         </svg>
       </span>
       <div id="panneau-notes" class="panneau-notes" hidden>
-        <form id="form-note">
-          <textarea id="saisie-note" placeholder="Écris une note, Entrée pour l'analyser…" rows="3"></textarea>
-        </form>
-        <div id="suggestion-tache" class="suggestion-tache" hidden></div>
-        <div id="statut-note" class="statut-note"></div>
+        <textarea id="saisie-note" placeholder="Écris une note par ligne…"></textarea>
+        <div id="suggestions-taches" class="suggestions-taches" hidden></div>
+        <div class="pied-notes">
+          <div id="statut-note" class="statut-note"></div>
+          <button id="btn-analyser-notes" type="button" class="btn-analyser">Analyser</button>
+        </div>
       </div>
     </section>
 
@@ -51,6 +52,10 @@
         </svg>
       </span>
       <div id="panneau-taches" class="panneau-taches" hidden>
+        <form id="form-ajout-tache" class="form-ajout-tache">
+          <button id="btn-ajouter-tache" type="button" class="btn-ajouter-tache" title="Ajouter une tâche">+</button>
+          <input id="saisie-tache" type="text" placeholder="Nouvelle tâche…" autocomplete="off" hidden>
+        </form>
         <div id="liste-taches" class="liste-taches"></div>
       </div>
     </section>

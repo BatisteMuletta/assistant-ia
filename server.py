@@ -20,14 +20,21 @@ from gmail_mcp import (
 from ia_provider import (
     CleManquanteError,
     CoutBloqueError,
-    analyser_note,
+    analyser_notes,
     ecrire_provider,
     generer_reponse,
     lire_provider,
     rediger_reponse_email,
     trier_emails_urgents,
 )
-from notes import ajouter_note
+from notes import (
+    lister_a_analyser,
+    marquer_ignoree,
+    marquer_tache,
+    mettre_a_jour_analyse,
+    sauvegarder_texte,
+    texte_notes,
+)
 from taches import ajouter_tache, lister_taches, toggle_tache
 
 BASE_DIR = Path(__file__).parent
@@ -201,25 +208,69 @@ def briefing_deadline():
     return jsonify({"ajoute": True})
 
 
-@app.route("/api/notes", methods=["POST"])
-def notes():
-    """Analyse une note (tâche potentielle ? langue ? version nettoyée), puis l'archive
-    automatiquement dans notes.md. La tâche suggérée, elle, n'est PAS créée ici : elle
-    est seulement renvoyée pour affichage, la création réelle attend la confirmation
-    explicite côté dashboard (voir /api/taches/confirmer)."""
+@app.route("/api/notes", methods=["GET"])
+def notes_get():
+    """Renvoie le texte brut de toutes les notes (une par ligne), pour remplir la zone
+    de saisie unique du dashboard à l'ouverture."""
+    return jsonify({"texte": texte_notes()})
+
+
+@app.route("/api/notes", methods=["PUT"])
+def notes_put():
+    """Sauvegarde le texte complet de la zone de notes (auto-save côté dashboard, pas
+    d'action explicite de l'utilisateur ici). Aucun appel IA : juste la persistance."""
     if not _origine_locale():
         return _origine_refusee()
-    texte = ((request.json or {}).get("texte") or "").strip()
-    if not texte:
-        return jsonify({"erreur": "Note vide."}), 400
+    texte = (request.json or {}).get("texte", "")
+    sauvegarder_texte(texte)
+    return jsonify({"sauvegarde": True})
+
+
+@app.route("/api/notes/analyser", methods=["POST"])
+def notes_analyser():
+    """Déclenché uniquement par le clic explicite sur le bouton "Analyser". N'analyse
+    que les notes pas encore liées à une tâche confirmée et pas ignorées (voir
+    notes.lister_a_analyser) : les autres ne sont pas renvoyées à l'IA, pour ne pas
+    payer à nouveau pour du texte déjà traité."""
+    if not _origine_locale():
+        return _origine_refusee()
+    candidates = lister_a_analyser()
+    if not candidates:
+        return jsonify({"suggestions": []})
     try:
-        analyse = analyser_note(texte)
+        resultats = analyser_notes(candidates)
     except CoutBloqueError as erreur:
         return jsonify({"erreur": str(erreur), "anomalie": True}), 402
     except CleManquanteError as erreur:
         return jsonify({"erreur": str(erreur), "anomalie": False}), 400
-    ajouter_note(analyse["note_nettoyee"])
-    return jsonify(analyse)
+
+    suggestions = []
+    for resultat in resultats:
+        note = mettre_a_jour_analyse(
+            resultat.get("id"),
+            langue=resultat.get("langue"),
+            traduction=resultat.get("traduction"),
+        )
+        if note and resultat.get("tache_suggeree"):
+            suggestions.append({
+                "note_id": note["id"],
+                "texte": note["texte"],
+                "tache_suggeree": resultat["tache_suggeree"],
+                "urgent": bool(resultat.get("urgent")),
+            })
+    return jsonify({"suggestions": suggestions})
+
+
+@app.route("/api/notes/<note_id>/ignorer", methods=["POST"])
+def notes_ignorer(note_id):
+    """Une note ignorée ne sera plus proposée par /api/notes/analyser tant que son
+    texte ne change pas (voir notes.sauvegarder_texte : une ligne modifiée redémarre
+    avec un état vierge)."""
+    if not _origine_locale():
+        return _origine_refusee()
+    if not marquer_ignoree(note_id):
+        return jsonify({"erreur": "Note introuvable."}), 404
+    return jsonify({"ignoree": True})
 
 
 @app.route("/api/taches", methods=["GET"])
@@ -230,15 +281,21 @@ def taches():
 @app.route("/api/taches/confirmer", methods=["POST"])
 def taches_confirmer():
     """Crée réellement une tâche suggérée — appelée uniquement sur clic explicite du
-    bouton "Confirmer" à côté de la suggestion, jamais automatiquement depuis /api/notes."""
+    bouton "Confirmer" à côté de la suggestion, jamais automatiquement depuis /api/notes.
+    Si note_id est fourni, la note d'origine est marquée comme liée à cette tâche pour
+    ne plus être proposée à l'analyse."""
     if not _origine_locale():
         return _origine_refusee()
     donnees = request.json or {}
     texte = (donnees.get("texte") or "").strip()
     urgent = bool(donnees.get("urgent"))
+    note_id = donnees.get("note_id")
     if not texte:
         return jsonify({"erreur": "Texte de tâche manquant."}), 400
-    return jsonify(ajouter_tache(texte, urgent=urgent))
+    tache = ajouter_tache(texte, urgent=urgent)
+    if note_id:
+        marquer_tache(note_id, tache["id"])
+    return jsonify(tache)
 
 
 @app.route("/api/taches/<tache_id>/toggle", methods=["POST"])

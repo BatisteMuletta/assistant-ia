@@ -142,40 +142,38 @@ def rediger_reponse_email(email):
     return generer_reponse([{"role": "user", "content": prompt}])
 
 
-def analyser_note(texte: str) -> dict:
-    """Analyse une note rapide : détecte si elle décrit une action à faire (suggestion
-    de tâche, jamais créée automatiquement — voir /api/taches/confirmer), détecte la
-    langue et traduit si besoin, et prépare une version nettoyée pour notes.md.
-    En cas d'échec de l'appel IA, la note est quand même conservée telle quelle
-    (dégradation silencieuse : pas de tâche suggérée, pas de traduction, texte brut)."""
+def analyser_notes(notes: list[dict]) -> list[dict]:
+    """Analyse en un seul appel IA toutes les notes passées (liste de {"id", "texte"})
+    pour repérer, par note, une éventuelle tâche à en tirer (jamais créée automatiquement
+    — voir /api/taches/confirmer) et sa langue/traduction si besoin. Un seul appel pour
+    tout le lot plutôt qu'un par note : moins cher, cohérent avec le suivi des coûts.
+    Si l'appel échoue ou renvoie un format inattendu, aucune suggestion cette fois-ci
+    (dégradation silencieuse : les notes restent telles quelles, on retentera au prochain
+    clic sur "Analyser")."""
+    if not notes:
+        return []
+
+    resume = "\n".join(f'- id={n["id"]} : "{n["texte"]}"' for n in notes)
     prompt = (
-        "Analyse cette note rapide prise par l'utilisateur. Réponds UNIQUEMENT avec un "
-        "JSON de la forme "
-        '{"tache_suggeree": "..." ou null, "urgent": true/false, "langue": "fr"/"en"/..., '
-        '"traduction": "..." ou null, "note_nettoyee": "..."}, sans aucun texte autour.\n'
+        "Voici une liste de notes rapides prises par l'utilisateur. Pour CHAQUE note, "
+        "détecte si elle décrit une action à faire, sa langue, et sa traduction française "
+        "si besoin. Réponds UNIQUEMENT avec un JSON de la forme "
+        '{"resultats": [{"id": "...", "tache_suggeree": "..." ou null, "urgent": true/false, '
+        '"langue": "fr"/"en"/..., "traduction": "..." ou null}, ...]}, une entrée par note, '
+        "sans aucun texte autour.\n"
         "- tache_suggeree : si la note décrit une action à faire, un texte de tâche court "
         "et actionnable ; sinon null.\n"
         "- urgent : uniquement pertinent si tache_suggeree n'est pas null.\n"
         "- langue : code à 2 lettres de la langue de la note.\n"
-        "- traduction : traduction française si la langue n'est pas le français, sinon null.\n"
-        "- note_nettoyee : la note reformulée brièvement, sans changer le sens, prête à "
-        "être archivée telle quelle.\n\n"
-        f"Note : {texte}"
+        "- traduction : traduction française si la langue n'est pas le français, sinon null.\n\n"
+        f"Notes :\n{resume}"
     )
-    resultat = {
-        "tache_suggeree": None,
-        "urgent": False,
-        "langue": "fr",
-        "traduction": None,
-        "note_nettoyee": texte,
-    }
     try:
         reponse = generer_reponse([{"role": "user", "content": prompt}])
         debut, fin = reponse.index("{"), reponse.rindex("}") + 1
-        resultat.update(json.loads(reponse[debut:fin]))
+        return json.loads(reponse[debut:fin]).get("resultats", [])
     except Exception:
-        pass
-    return resultat
+        return []
 
 
 def detecter_deadlines(mails: list[dict]) -> list[dict]:
