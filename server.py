@@ -12,6 +12,16 @@ from flask import Flask, jsonify, request, send_from_directory
 from briefing import confirmer_deadline, construire_briefing
 from calendar_mcp import ServeurCalendarIndisponibleError, lister_evenements_semaine
 from costs import etat_couts
+from fichiers_manager import (
+    ActionRefuseeError,
+    FichierIntrouvableError,
+    deplacer_fichier,
+    lire_extrait,
+    lister_sous_dossiers_existants,
+    renommer,
+    resoudre_chemin,
+    scanner_nouveaux_fichiers,
+)
 from gmail_mcp import (
     ServeurGmailIndisponibleError,
     lire_email,
@@ -24,6 +34,7 @@ from ia_provider import (
     ecrire_provider,
     generer_reponse,
     lire_provider,
+    proposer_organisation_fichier,
     rediger_reponse_email,
     trier_emails_urgents,
 )
@@ -206,6 +217,77 @@ def briefing_deadline():
     except ServeurCalendarIndisponibleError as erreur:
         return jsonify({"erreur": str(erreur)}), 503
     return jsonify({"ajoute": True})
+
+
+@app.route("/api/fichiers/scan", methods=["POST"])
+def fichiers_scan():
+    """Scanne ~/Downloads et renvoie les fichiers jamais vus lors d'un scan précédent.
+    Noms + taille uniquement (voir fichiers_manager.scanner_nouveaux_fichiers) — ne lit
+    aucun contenu, ne renomme rien, ne déplace rien."""
+    if not _origine_locale():
+        return _origine_refusee()
+    return jsonify({"nouveaux": scanner_nouveaux_fichiers()})
+
+
+@app.route("/api/fichiers/<nom>/lire", methods=["POST"])
+def fichiers_lire(nom):
+    """Ce clic EST l'autorisation explicite de lire le contenu de ce fichier précis (voir
+    SKILL.md — jamais automatique, jamais globale). Lit un extrait, puis appelle le modèle
+    avec tool-calling (forcé Anthropic). renommer_fichier s'exécute ici même, automatique-
+    ment ; un déplacement éventuel reste en attente de /api/fichiers/<nom>/confirmer."""
+    if not _origine_locale():
+        return _origine_refusee()
+    try:
+        chemin = resoudre_chemin(nom)
+    except (FichierIntrouvableError, ActionRefuseeError) as erreur:
+        return jsonify({"erreur": str(erreur)}), 404
+
+    extrait = lire_extrait(nom)
+    try:
+        appels = proposer_organisation_fichier(
+            nom, chemin.stat().st_size, extrait, lister_sous_dossiers_existants()
+        )
+    except CoutBloqueError as erreur:
+        return jsonify({"erreur": str(erreur), "anomalie": True}), 402
+    except CleManquanteError as erreur:
+        return jsonify({"erreur": str(erreur), "anomalie": False}), 400
+
+    nom_final = nom
+    categorie_proposee = None
+    sous_dossier_propose = None
+    for appel in appels:
+        if appel["name"] == "renommer_fichier":
+            try:
+                nom_final = renommer(nom_final, appel["input"]["nouveau_nom"])
+            except ActionRefuseeError as erreur:
+                return jsonify({"erreur": str(erreur)}), 400
+        elif appel["name"] == "proposer_deplacement":
+            categorie_proposee = appel["input"].get("categorie")
+            sous_dossier_propose = appel["input"].get("sous_dossier")
+
+    return jsonify({
+        "nom": nom_final,
+        "categorie_proposee": categorie_proposee,
+        "sous_dossier_propose": sous_dossier_propose,
+    })
+
+
+@app.route("/api/fichiers/<nom>/confirmer", methods=["POST"])
+def fichiers_confirmer(nom):
+    """Exécute le déplacement vers <categorie>[/<sous_dossier>] — uniquement sur ce clic
+    explicite, jamais automatique (à la différence du renommage, voir
+    /api/fichiers/<nom>/lire). Ce clic couvre aussi la création du sous-dossier s'il
+    n'existe pas encore."""
+    if not _origine_locale():
+        return _origine_refusee()
+    donnees = request.json or {}
+    categorie = donnees.get("categorie") or ""
+    sous_dossier = donnees.get("sous_dossier") or None
+    try:
+        deplacer_fichier(nom, categorie, sous_dossier)
+    except (FichierIntrouvableError, ActionRefuseeError) as erreur:
+        return jsonify({"erreur": str(erreur)}), 400
+    return jsonify({"deplace": True})
 
 
 @app.route("/api/notes", methods=["GET"])

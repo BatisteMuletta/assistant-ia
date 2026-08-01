@@ -575,6 +575,130 @@ function creerLigneDeadline(deadline) {
   return ligne;
 }
 
+// --- Fichiers détectés (~/Downloads) : scan manuel, jamais automatique ---
+// Chaque étape reste un clic explicite distinct : "Scanner" ne fait que lister des noms
+// (autorisé sans permission) ; "Lire et proposer un nom" EST l'autorisation de lire le
+// contenu de ce fichier précis (renomme aussitôt, automatique par conception — voir
+// ia_provider.OUTILS_FICHIERS) ; le déplacement vers Cours/Perso/Pro reste, lui,
+// toujours confirmé, quelle que soit la catégorie choisie.
+const btnScannerFichiers = document.getElementById("btn-scanner-fichiers");
+const listeFichiers = document.getElementById("liste-fichiers");
+
+btnScannerFichiers.addEventListener("click", async () => {
+  btnScannerFichiers.disabled = true;
+  btnScannerFichiers.textContent = "Scan…";
+  try {
+    const reponse = await fetch("/api/fichiers/scan", { method: "POST" });
+    const donnees = await reponse.json();
+    for (const fichier of donnees.nouveaux || []) {
+      listeFichiers.appendChild(creerLigneFichier(fichier));
+    }
+    if (!listeFichiers.children.length) {
+      listeFichiers.textContent = "Aucun nouveau fichier.";
+    }
+  } catch {
+    listeFichiers.textContent = "Impossible de joindre le serveur local.";
+  }
+  btnScannerFichiers.disabled = false;
+  btnScannerFichiers.textContent = "Scanner";
+});
+
+function creerLigneFichier(fichier) {
+  const carte = document.createElement("div");
+  carte.className = "fichier";
+
+  const ligne = document.createElement("div");
+  ligne.className = "fichier-ligne";
+  const nom = document.createElement("span");
+  nom.className = "fichier-nom";
+  nom.textContent = fichier.nom;
+  ligne.appendChild(nom);
+
+  const actions = document.createElement("div");
+  actions.className = "fichier-actions";
+  const btnLire = document.createElement("button");
+  btnLire.type = "button";
+  btnLire.className = "btn-ajouter-deadline";
+  btnLire.textContent = "Lire et proposer un nom";
+  actions.appendChild(btnLire);
+  ligne.appendChild(actions);
+
+  const statut = document.createElement("div");
+  statut.className = "fichier-statut";
+  statut.hidden = true;
+
+  let nomActuel = fichier.nom;
+
+  btnLire.addEventListener("click", async () => {
+    btnLire.disabled = true;
+    btnLire.textContent = "Lecture…";
+    try {
+      const reponse = await fetch(`/api/fichiers/${encodeURIComponent(nomActuel)}/lire`, { method: "POST" });
+      const donnees = await reponse.json();
+      if (!reponse.ok) {
+        statut.hidden = false;
+        statut.textContent = donnees.erreur || "Impossible de traiter ce fichier.";
+        btnLire.hidden = true;
+        return;
+      }
+      nomActuel = donnees.nom;
+      nom.textContent = nomActuel;
+      actions.textContent = "";
+      statut.hidden = false;
+
+      const categorie = donnees.categorie_proposee;
+      const sousDossier = donnees.sous_dossier_propose;
+      if (categorie) {
+        const cible = sousDossier ? `${categorie}/${sousDossier}` : categorie;
+        statut.textContent = `Renommé — déplacement proposé vers ${cible}.`;
+        const btnDeplacer = document.createElement("button");
+        btnDeplacer.type = "button";
+        btnDeplacer.className = "btn-ajouter-deadline";
+        btnDeplacer.textContent = `Déplacer vers ${cible}`;
+        btnDeplacer.addEventListener("click", async () => {
+          btnDeplacer.disabled = true;
+          btnDeplacer.textContent = "Déplacement…";
+          try {
+            const rep = await fetch(`/api/fichiers/${encodeURIComponent(nomActuel)}/confirmer`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ categorie, sous_dossier: sousDossier }),
+            });
+            if (!rep.ok) throw new Error();
+            statut.textContent = `Déplacé vers ${cible} ✓`;
+            actions.textContent = "";
+          } catch {
+            statut.textContent = "Impossible de déplacer ce fichier.";
+            btnDeplacer.disabled = false;
+            btnDeplacer.textContent = `Déplacer vers ${cible}`;
+          }
+        });
+        const btnLaisser = document.createElement("button");
+        btnLaisser.type = "button";
+        btnLaisser.className = "btn-ajouter-deadline";
+        btnLaisser.textContent = "Laisser dans Downloads";
+        btnLaisser.addEventListener("click", () => {
+          statut.textContent = "Renommé, laissé dans Downloads.";
+          actions.textContent = "";
+        });
+        actions.appendChild(btnDeplacer);
+        actions.appendChild(btnLaisser);
+      } else {
+        statut.textContent = "Renommé, reste dans Downloads.";
+      }
+    } catch {
+      statut.hidden = false;
+      statut.textContent = "Impossible de joindre le serveur local.";
+      btnLire.disabled = false;
+      btnLire.textContent = "Lire et proposer un nom";
+    }
+  });
+
+  carte.appendChild(ligne);
+  carte.appendChild(statut);
+  return carte;
+}
+
 // --- Notes (icône seule par défaut, zone de texte unique au clic) ---
 // Une seule zone de texte libre, toujours entièrement visible et éditable comme un
 // fichier texte (une ligne = une note). Sauvegarde automatique en tâche de fond ;

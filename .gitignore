@@ -9,6 +9,9 @@ __pycache__/
 venv/
 env/
 
+# Préférences locales Claude Code (permissions), propres à cette machine
+.claude/
+
 # Fichiers de données locales générées par l'app (JSON/logs)
 # Repo public : données personnelles jamais versionnées (dépenses, historique chat, activité)
 *.log
@@ -20,3 +23,4 @@ mails_notifies.json
 config.json
 tasks.json
 notes.json
+fichiers_traites.json

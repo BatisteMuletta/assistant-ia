@@ -93,6 +93,119 @@ def _appel_anthropic(historique):
     return reponse.content[0].text
 
 
+OUTILS_FICHIERS = [
+    {
+        "name": "renommer_fichier",
+        "description": (
+            "Renomme le fichier en cours de traitement, dans son dossier actuel — jamais "
+            "un déplacement. Toujours appeler cet outil, même si le nom actuel semble déjà "
+            "correct (proposer alors le même nom)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "nouveau_nom": {
+                    "type": "string",
+                    "description": (
+                        "Nouveau nom au format AAAA-MM-JJ_[Catégorie]_[Description].[ext] "
+                        "— un simple nom de fichier, jamais un chemin."
+                    ),
+                }
+            },
+            "required": ["nouveau_nom"],
+        },
+    },
+    {
+        "name": "proposer_deplacement",
+        "description": (
+            "Propose de déplacer le fichier vers l'une des trois catégories (Cours, Perso, "
+            "Pro), uniquement si l'un des trois s'applique clairement. N'appelle PAS cet "
+            "outil en cas de doute — ce déplacement ne s'exécute jamais automatiquement, "
+            "il attend une confirmation explicite de l'utilisateur, qui peut aussi créer "
+            "le sous-dossier proposé."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "categorie": {"type": "string", "enum": ["Cours", "Perso", "Pro"]},
+                "sous_dossier": {
+                    "type": "string",
+                    "description": (
+                        "Nom du sous-dossier dans cette catégorie (ex: 'Gestion-de-projet' "
+                        "pour Cours, 'Photos' pour Perso). Reprendre un sous-dossier déjà "
+                        "existant listé dans le prompt s'il correspond ; sinon en proposer "
+                        "un nouveau, court, sans accents ni espaces (tirets). Omettre ce "
+                        "champ seulement si le fichier ne correspond clairement à aucun "
+                        "sous-classement utile."
+                    ),
+                },
+            },
+            "required": ["categorie"],
+        },
+    },
+]
+
+
+def proposer_organisation_fichier(
+    nom_fichier: str,
+    taille_octets: int,
+    extrait_contenu: str,
+    sous_dossiers_existants: dict[str, list[str]],
+) -> list[dict]:
+    """Tool-calling forcé sur Anthropic, quel que soit le provider actif ailleurs dans le
+    dashboard — décision explicite de l'utilisateur (01/08/2026) : renommer_fichier
+    s'exécute automatiquement sans confirmation humaine, la fiabilité du modèle prime ici
+    sur le principe "gratuit par défaut" appliqué ailleurs (Ollama, modèle 1B, jugé trop
+    peu fiable pour une action auto-exécutée). Renvoie la liste brute des appels d'outils
+    demandés par le modèle (name + input) — ne les exécute jamais ici, l'exécution reste
+    la responsabilité de fichiers_manager.py (voir server.py, route /api/fichiers/<nom>/lire)."""
+    if get_total_spent() >= SEUIL_ANOMALIE:
+        raise CoutBloqueError(
+            f"Seuil de secours de {SEUIL_ANOMALIE}$ atteint ce mois-ci — appel bloqué."
+        )
+    cle = os.environ.get("ANTHROPIC_API_KEY")
+    if not cle:
+        raise CleManquanteError(
+            "ANTHROPIC_API_KEY absente de .env — nécessaire pour le tool-calling du "
+            "Projet 2, forcé sur Anthropic indépendamment du provider actif."
+        )
+
+    contexte_contenu = (
+        f"Extrait du contenu :\n{extrait_contenu}" if extrait_contenu else "(contenu non lisible sous forme texte — se baser sur le nom et l'extension)"
+    )
+    aujourdhui = datetime.now().strftime("%Y-%m-%d")
+    resume_sous_dossiers = "\n".join(
+        f"- {categorie} : " + (", ".join(sous_dossiers) if sous_dossiers else "(aucun sous-dossier pour l'instant)")
+        for categorie, sous_dossiers in sous_dossiers_existants.items()
+    )
+    prompt = (
+        f"Nous sommes le {aujourdhui}. Voici un fichier détecté dans ~/Downloads. Propose un "
+        "renommage (toujours) et, si pertinent seulement, un déplacement vers l'une des "
+        "catégories Cours / Perso / Pro.\n\n"
+        f"Nom actuel : {nom_fichier}\n"
+        f"Taille : {taille_octets} octets\n"
+        f"{contexte_contenu}\n\n"
+        f"Sous-dossiers déjà existants par catégorie :\n{resume_sous_dossiers}\n\n"
+        "Pour la date AAAA-MM-JJ du nouveau nom : utilise la date d'aujourd'hui donnée "
+        "ci-dessus, sauf si le contenu du fichier mentionne explicitement une autre date "
+        "clairement plus pertinente (ex: date du cours) — dans ce cas, utilise celle-là."
+    )
+
+    client = Anthropic(api_key=cle)
+    reponse = client.messages.create(
+        model=MODELE_ANTHROPIC,
+        max_tokens=512,
+        tools=OUTILS_FICHIERS,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    log_cost(calculer_cout(reponse.usage))
+    return [
+        {"name": bloc.name, "input": bloc.input}
+        for bloc in reponse.content
+        if bloc.type == "tool_use"
+    ]
+
+
 def trier_emails_urgents(emails):
     """Ajoute un champ "urgent" (bool) à chaque email de la liste, en demandant au modèle
     actif (Ollama ou Anthropic) lesquels nécessitent une action rapide.
